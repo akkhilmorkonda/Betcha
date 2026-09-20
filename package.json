@@ -1,0 +1,41 @@
+{
+  "name": "betcha",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "db:push": "prisma db push && prisma generate",
+    "db:reset": "prisma db push --force-reset && prisma generate && npm run db:seed",
+    "db:restore": "node --experimental-strip-types scripts/db-snapshot.ts load",
+    "db:seed": "node --experimental-strip-types --env-file=.env prisma/seed.ts",
+    "db:snapshot": "node --experimental-strip-types scripts/db-snapshot.ts save",
+    "build": "prisma generate && next build",
+    "demo:numbers": "node --experimental-strip-types scripts/demo-numbers.ts",
+    "dev": "next dev",
+    "seed:sim": "node --experimental-strip-types scripts/simulate-seed.ts",
+    "spark:check": "node --experimental-strip-types --env-file=.env scripts/check-spark.ts",
+    "start": "next start",
+    "studio": "prisma studio",
+    "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "video": "remotion render remotion/Root.tsx BetchaPromo out/betcha-promo.mp4",
+    "video:preview": "remotion preview remotion/Root.tsx"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0",
+    "@remotion/cli": "^4.0.526",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.526"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "prisma": "^6.1.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2"
+  },
+  "type": "module"
+}

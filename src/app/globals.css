@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+body {
+  background: #0B0D12;
+  color: #E9ECF3;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .card  { @apply bg-surface border border-edge rounded-2xl; }
+  .pill  { @apply text-[11px] uppercase tracking-[0.1em] text-muted; }
+  .num   { @apply font-num tabular-nums; }
+  .chip  { @apply text-xs rounded-full px-3 py-2 border border-edge text-muted; }
+  .chipOn{ @apply text-xs rounded-full px-3 py-2 bg-accent text-ink font-medium; }
+}
+
+/* Avatars are initials on a tinted disc — no images to load or go missing. */
+.av { @apply rounded-full grid place-items-center font-bold shrink-0; }

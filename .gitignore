@@ -1,0 +1,31 @@
+# --- secrets -----------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+!.env.example
+
+# --- dependencies & build ----------------------------------------------
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- database ----------------------------------------------------------
+*.db
+*.db-journal
+*.sqlite
+prisma/dev.db*
+prisma/snapshots/
+
+# --- media we don't own the rights to ----------------------------------
+public/track.mp3
+betcha-ad/public/track.mp3
+
+# --- local tooling -----------------------------------------------------
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
