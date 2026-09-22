@@ -23,7 +23,6 @@ prisma/snapshots/
 
 # --- media we don't own the rights to ----------------------------------
 public/track.mp3
-betcha-ad/public/track.mp3
 
 # --- local tooling -----------------------------------------------------
 .claude/settings.local.json

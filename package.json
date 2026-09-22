@@ -15,18 +15,14 @@
     "spark:check": "node --experimental-strip-types --env-file=.env scripts/check-spark.ts",
     "start": "next start",
     "studio": "prisma studio",
-    "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "video": "remotion render remotion/Root.tsx BetchaPromo out/betcha-promo.mp4",
-    "video:preview": "remotion preview remotion/Root.tsx"
+    "test": "node --test --experimental-strip-types tests/*.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
-    "@remotion/cli": "^4.0.526",
     "better-auth": "^1.7.5",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "remotion": "^4.0.526",
     "zod": "^4.6.5"
   },
   "devDependencies": {
