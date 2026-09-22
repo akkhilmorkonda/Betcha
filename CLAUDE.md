@@ -64,9 +64,13 @@ wrong, not the test.
 2. **Fixed odds.** Each position locks its multiplier at placement. A circle bank
    pays winners `stake × locked multiplier`.
 
-3. **A proposer never loses more than they posted.** `LIABILITY_CAP = 2000` per
-   bet; once further money on a side would push the bank past it, that side stops
-   accepting stakes. Fuzzed over 5,000 random bets.
+3. **A proposer never loses more than they posted.** The cap is per bet and is
+   the proposer's own `Bet.proposerLiability`, bounded by `MIN_LIABILITY` and
+   `MAX_LIABILITY` in `market.ts` — there is no global `LIABILITY_CAP` constant,
+   despite what this file used to claim. Once further money on a side would push
+   the bank past that backing, `remainingCapacity` stops accepting stakes on it.
+   Fuzzed over 5,000 random bets, asserted exactly now that money is integer
+   cents.
 
 4. **Conservation.** Money in equals money out across a full resolution.
 
@@ -127,13 +131,23 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
   between six other people. It now requires membership of the bet's circle, via
   `evidenceRefusal` in `eligibility.ts` (6 tests, incl. a 5k fuzz), and checks
   that *before* reading the request body.
+- **`next.config.mjs` is empty.** The ngrok/trycloudflare wildcards are gone, and
+  the whole `experimental.serverActions` block with them: there is no
+  `"use server"` anywhere in `src/`, so `allowedOrigins` governed nothing and
+  `bodySizeLimit` bounded nothing (it applies to Server Actions, never route
+  handlers). Evidence size is bounded by `submitEvidenceBody` in `schemas.ts`.
+- **Remotion is gone.** `remotion/`, `remotion.config.ts`, `betcha-ad/` and
+  `REMOTION_PROMPT.md` deleted; both packages dropped. Nothing in `src/`,
+  `tests/`, `prisma/` or `scripts/` ever imported it. Recoverable from git
+  history if the promo video is ever wanted again.
 - `/signin` page (sign in + sign up); the circle page redirects there on 401.
 - Seeded users get real credential accounts hashed with Better Auth's own
   `hashPassword`, so the demo circle is reachable. Password: `SEED_PASSWORD`,
   default `betcha-dev-password`.
 
-**Still open in Phase 1:**
-- Strip the ngrok/cloudflare allowlists from `next.config.mjs`
+**Phase 1 is complete.** What remains below is Phase 2 and beyond.
+
+**Known, deliberately not fixed:**
 - Bets have no deadline guard on `startVote`: any member can force an open bet
   to a circle vote before its deadline by submitting evidence with no photo.
   The vote itself excludes stakeholders, so this is a nuisance rather than a
@@ -194,6 +208,11 @@ breaks a cent at a time; divide anywhere else and a figure renders 100x wrong.
 stake provably fits under the cap. It does not trust the division, because
 `payoutFor` rounds and the last cent could otherwise breach the proposer's
 backing.
+
+**zod is a direct dependency on purpose.** It arrived transitively through
+`@remotion/cli`, a devDependency, and every request body now depends on it.
+Removing Remotion would have taken runtime validation with it. Still 5 audit
+findings after that removal, unchanged.
 
 **`npm audit` reports 5 vulnerabilities. Leave them.** All are build/dev-only:
 postcss via next, deepmerge-ts via the prisma CLI (a devDependency). Nothing is in
