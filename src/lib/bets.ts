@@ -25,6 +25,7 @@ import {
   type Placed,
   type Side,
 } from "./market";
+import { selfDeal } from "./eligibility";
 
 export class BetError extends Error {}
 
@@ -119,10 +120,31 @@ export async function createBet(input: {
     Math.max(MIN_LIABILITY, Math.round(input.liability ?? DEFAULT_LIABILITY))
   );
 
+  // A head-to-head against yourself has no coherent pair of sides, and it puts
+  // eligibility.ts in the position of having to pick which rule wins. Refuse it
+  // at the source instead.
+  if (input.opponentId && input.opponentId === input.subjectId)
+    throw new BetError("Pick someone else — a head-to-head needs two people");
+
   const backer = await prisma.membership.findUnique({
     where: { userId_circleId: { userId: input.creatorId, circleId: input.circleId } },
   });
   if (!backer) throw new BetError("You're not in this circle");
+
+  // The subject and opponent must be in this circle too. Only the creator was
+  // ever checked, so a bet could be opened about someone who isn't a member —
+  // and it would then be unresolvable, because resolveBet settles ratings and
+  // balances through their Membership row, which doesn't exist.
+  const subjectMembership = await prisma.membership.findUnique({
+    where: { userId_circleId: { userId: input.subjectId, circleId: input.circleId } },
+  });
+  if (!subjectMembership) throw new BetError("That person isn't in this circle");
+  if (input.opponentId) {
+    const opponentMembership = await prisma.membership.findUnique({
+      where: { userId_circleId: { userId: input.opponentId, circleId: input.circleId } },
+    });
+    if (!opponentMembership) throw new BetError("Their opponent isn't in this circle");
+  }
   if (backer.balance < liability)
     throw new BetError(
       `You're backing this with ${liability}, but you only have ${Math.floor(backer.balance)}`
@@ -215,6 +237,22 @@ export async function placePosition(input: {
   }
   if (input.amount <= 0) throw new BetError("Stake must be positive");
   if (new Date() > bet.deadline) throw new BetError("Past the deadline");
+
+  // Nobody may profit from their own failure. See src/lib/eligibility.ts for
+  // why, and tests/eligibility.test.ts for the invariant.
+  switch (
+    selfDeal({
+      userId: input.userId,
+      side: input.side,
+      subjectId: bet.subjectId,
+      opponentId: bet.opponentId,
+    })
+  ) {
+    case "subject-against-self":
+      throw new BetError("This bet is about you — you can only back yourself to do it");
+    case "opponent-against-self":
+      throw new BetError("You're the opponent here — you can only back yourself to win");
+  }
 
   const membership = await prisma.membership.findUnique({
     where: { userId_circleId: { userId: input.userId, circleId: bet.circleId } },

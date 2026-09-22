@@ -1,13 +1,17 @@
-// Betcha — SQLite for local/hackathon speed.
-// To ship on Postgres: change provider to "postgresql" and point DATABASE_URL at it.
-// Schema deliberately avoids enums and arrays so the port is a one-line change.
+// Betcha — Postgres.
+//
+// Was SQLite through the hackathon. The schema avoided enums and arrays the
+// whole way precisely so this stayed a one-line change, and it did.
+//
+// prisma/dev.db is dead once the first Postgres migration runs. It's gitignored
+// and can be deleted; `npm run db:seed` rebuilds a circle from seed-data.ts.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

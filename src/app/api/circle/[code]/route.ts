@@ -72,7 +72,7 @@ export async function GET(
           deadline: b.deadline,
           subjectId: b.subjectId,
           creator: b.creator?.name ?? null,
-          proposerSide: b.proposerSide,
+          // proposerSide comes from the ...betMarket(b) spread below.
           // Who's in, for the social row on the feed.
           players: b.positions.map((p) => ({
             userId: p.userId,
