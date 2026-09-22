@@ -55,3 +55,39 @@ export function permittedSide(args: {
   if (args.opponentId && args.userId === args.opponentId) return "B";
   return null;
 }
+
+/**
+ * WHO MAY SUBMIT EVIDENCE.
+ *
+ * Submitting evidence is not a passive act. A photo Spark reads as clearly true
+ * or clearly false resolves the bet outright and pays every position at its
+ * locked multiplier; a submission with no photo drops the bet straight to a
+ * circle vote. Either way the caller moves other people's money.
+ *
+ * The route used to require only that the caller be signed in. It read the user
+ * id and then never used it, so anyone with a bet id — a stranger in no circle
+ * at all — could settle a bet between six other people.
+ *
+ * Membership in the bet's own circle is the gate. It is deliberately not
+ * narrowed to the subject: in a friend group the person holding the camera is
+ * usually someone else, and the UI offers the control to every viewer of an
+ * open bet. Stakeholders are already excluded from the vote itself by
+ * eligibleVoterIds, so a forced vote is decided by people with nothing on it.
+ */
+export type EvidenceRefusal = "not-a-member" | "already-resolved" | null;
+
+export function evidenceRefusal(args: {
+  isCircleMember: boolean;
+  betStatus: string;
+}): EvidenceRefusal {
+  if (!args.isCircleMember) return "not-a-member";
+  if (args.betStatus === "resolved") return "already-resolved";
+  return null;
+}
+
+export function maySubmitEvidence(args: {
+  isCircleMember: boolean;
+  betStatus: string;
+}): boolean {
+  return evidenceRefusal(args) === null;
+}

@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { selfDeal, permittedSide } from "../src/lib/eligibility.ts";
+import {
+  selfDeal,
+  permittedSide,
+  evidenceRefusal,
+  maySubmitEvidence,
+} from "../src/lib/eligibility.ts";
 import type { Side } from "../src/lib/market.ts";
 import { mulberry32 } from "../src/lib/rng.ts";
 
@@ -138,4 +143,62 @@ test("FUZZ: an interested party is never allowed the side that profits from thei
 
   // Sanity: the fuzzer actually exercised the blocked paths.
   assert.ok(blockedCount > 1000, `only ${blockedCount} self-deals generated`);
+});
+
+/**
+ * THE INVARIANT: only someone inside the circle can move that circle's money.
+ *
+ * Submitting evidence is a write. A verdict Spark reads as clearly true or
+ * clearly false resolves the bet and pays every position at its locked
+ * multiplier; submitting nothing drops the bet to a circle vote. The route that
+ * does this authenticated the caller and then ignored who they were.
+ */
+test("a stranger in no circle cannot submit evidence", () => {
+  assert.equal(maySubmitEvidence({ isCircleMember: false, betStatus: "open" }), false);
+  assert.equal(evidenceRefusal({ isCircleMember: false, betStatus: "open" }), "not-a-member");
+});
+
+test("a member of the bet's circle may submit", () => {
+  assert.equal(maySubmitEvidence({ isCircleMember: true, betStatus: "open" }), true);
+  assert.equal(evidenceRefusal({ isCircleMember: true, betStatus: "open" }), null);
+});
+
+test("a resolved bet is closed to further evidence, even for a member", () => {
+  assert.equal(maySubmitEvidence({ isCircleMember: true, betStatus: "resolved" }), false);
+  assert.equal(
+    evidenceRefusal({ isCircleMember: true, betStatus: "resolved" }),
+    "already-resolved"
+  );
+});
+
+test("membership is checked before status, so a stranger never learns the bet resolved", () => {
+  assert.equal(
+    evidenceRefusal({ isCircleMember: false, betStatus: "resolved" }),
+    "not-a-member"
+  );
+});
+
+test("a member may still submit while a bet is pending or voting", () => {
+  for (const status of ["open", "pending", "voting"]) {
+    assert.equal(maySubmitEvidence({ isCircleMember: true, betStatus: status }), true);
+  }
+});
+
+test("FUZZ: non-membership refuses across every status, with no exception", () => {
+  const rand = mulberry32(31);
+  const statuses = ["open", "pending", "voting", "resolved", "void", "", "OPEN", "garbage"];
+  for (let i = 0; i < 5000; i++) {
+    const betStatus = statuses[Math.floor(rand() * statuses.length)];
+    assert.equal(
+      maySubmitEvidence({ isCircleMember: false, betStatus }),
+      false,
+      `non-member allowed through on status ${betStatus}`
+    );
+    // And a member is refused only when the bet is already resolved.
+    assert.equal(
+      maySubmitEvidence({ isCircleMember: true, betStatus }),
+      betStatus !== "resolved",
+      `member verdict wrong on status ${betStatus}`
+    );
+  }
 });
