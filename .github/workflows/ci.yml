@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a PR makes the previous run irrelevant. Don't pay for it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: test, typecheck, migrate, seed, build
+    runs-on: ubuntu-latest
+
+    env:
+      # SQLite, so CI needs no database service. Prisma resolves a relative
+      # file: path against prisma/, so this lands at prisma/ci.db.
+      DATABASE_URL: "file:./ci.db"
+      # Not a secret. Better Auth refuses to start without one, and nothing in
+      # CI issues a session anyone can use. A real secret lives in .env locally
+      # and must never be committed.
+      BETTER_AUTH_SECRET: "ci-placeholder-not-a-real-secret-do-not-reuse"
+      BETTER_AUTH_URL: "http://localhost:3000"
+      # Absent on purpose: with no MUSE_SPARK_API_KEY, evidence falls through to
+      # a circle vote instead of calling out to a model. CI must not make
+      # network calls to a paid endpoint.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The test suite runs under --experimental-strip-types, which needs a
+          # recent Node. 24 matches local development.
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Nothing typechecks before this: the generated client is where the model
+      # types come from. A missing generate is what produced 30 phantom errors
+      # once already.
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      # The 91 cases carry the economy's invariants — conservation, the
+      # liability cap, self-dealing, the Spark verdict gate. They need no
+      # database, so they run first and fail fastest.
+      - name: Test
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # deploy, not dev: applies the committed migration history exactly as a
+      # real deployment would, and fails if a migration was hand-edited or a
+      # schema change was never captured in one.
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Check schema and migrations agree
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "file:./shadow.db" --exit-code
+
+      # Exercises the schema against real writes. The seed is also the only
+      # thing that proves Better Auth's tables accept a credential account.
+      - name: Seed
+        run: npm run db:seed
+
+      - name: Build
+        run: npm run build
