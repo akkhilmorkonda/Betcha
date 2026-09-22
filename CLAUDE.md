@@ -12,7 +12,7 @@ your friends will do things; odds come from their track record. Built for HackMI
 
 ```bash
 npm run dev            # next dev
-npm test               # 111 cases, node --test, no DB needed
+npm test               # 186 cases, node --test, no DB needed
 npm run build          # prisma generate && next build
 npm run db:seed        # load the demo circle (+ credential accounts)
 npm run seed:sim       # print the seeded Elo spread without touching the DB
@@ -33,6 +33,8 @@ src/lib/market.ts       pure pricing + Elo. no Prisma. the heart of the product.
 src/lib/eligibility.ts  pure. who may take which side.
 src/lib/circles.ts      pure. invite codes, name rules, join rules.
 src/lib/rate-limit.ts   pure. sliding-window policy, one per action.
+src/lib/moderation.ts   content safety. structural rules, written policy, then models.
+src/lib/account-deletion.ts  pure. what a scrubbed user row contains.
 src/lib/schemas.ts      pure. zod shape of every request body.
 src/lib/guard.ts        request-facing. readBody + rateLimit, used by every write route.
 src/lib/session.ts      who is calling. wraps Better Auth. the only identity source.
@@ -104,7 +106,7 @@ wrong, not the test.
 
 Phase 1 of the App Store plan. Auth is wired and the read path is closed.
 
-**Landed and verified (111/111 tests, tsc clean, `next build` clean):**
+**Landed and verified (186/186 tests, tsc clean, `next build` clean):**
 - Self-deal guard (`eligibility.ts` + 10 tests incl. a 20k-case fuzz)
 - `createBet` checks subject and opponent are circle members
 - Head-to-head against yourself refused at creation
@@ -145,13 +147,52 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
   `hashPassword`, so the demo circle is reachable. Password: `SEED_PASSWORD`,
   default `betcha-dev-password`.
 
-**Phase 1 is complete.** What remains below is Phase 2 and beyond.
+**Phase 1 is complete.** Wave 1 of Phase 2 has landed too.
 
-**Known, deliberately not fixed:**
-- Bets have no deadline guard on `startVote`: any member can force an open bet
-  to a circle vote before its deadline by submitting evidence with no photo.
-  The vote itself excludes stakeholders, so this is a nuisance rather than a
-  theft, but the subject loses the time they had left to complete the challenge.
+**Wave 1 (186/186 tests, tsc clean, `next build` clean, no migration drift):**
+- **Account deletion is safe.** Anonymize in place, ledger relations `Restrict`,
+  `databaseHooks.user.delete.before` vetoes the row delete. See the trap below —
+  it corrects what this file used to say.
+- **Content safety is three layers, only the last of which is a model.**
+  `dares` is template-only, enforced at the schema boundary *and* in `createBet`,
+  which unlike the schema can load the `ChallengeTemplate` row and confirm it is
+  itself a dare — closing the bypass of pointing a `dares` bet at a `grades`
+  template. Then `TITLE_POLICY`, enforced as the classifier's system prompt and
+  again offline. Then `omni-moderation-latest` for photos, before Spark reads
+  them, and a `chat/completions` call for titles before any write.
+- **Invariant 9 applied twice.** `/moderations` returns `category_scores` right
+  next to the booleans — the same trap in a different costume. Nothing in
+  `moderation.ts` reads a score. A test asserts no score key exists on the
+  result type at all, plus two 20,000-case fuzzes.
+- **`startVote` has a deadline guard.** Before the deadline only the SUBJECT may
+  force a vote — the remaining time is the thing being bet on and it is theirs.
+  After it, any member may. The PROPOSER gets no early exit despite backing the
+  bet: they are the counterparty to every position, so "end it before they can
+  do it" is exactly the move the guard stops. There is a named test so nobody
+  adds them as an exception later.
+- **The seed fixture can ship.** Fictional cast, and the four Guideline 1.4.5
+  templates cut (`d1` cold plunge, `d4` ghost pepper, `d9` barefoot lap,
+  `d8` lunch alone). 24 templates, 181 resolved bets, 4 open — still populated,
+  which matters because an empty circle reads as Guideline 2.1 "incomplete".
+
+**Open, and each one is a decision rather than a task:**
+- **No delete button.** The path is safe, the UI is not wired.
+- **No audit trail of unreviewed titles.** With no `OPENAI_API_KEY`, photos
+  REFUSE (there is no offline fallback for an image) but titles ALLOW with an
+  `unreviewed` verdict — that asymmetry is deliberate. The flag cannot be
+  persisted: there is no column. Adding `Bet.titleReviewed` is a schema change
+  nobody has decided on.
+- **`custom` is a wide-open free-text category.** The product constraints name
+  `grades` and `sports` and say nothing about `custom`, which is the obvious
+  place to relabel a dare.
+- **`d8` "eat lunch alone" would pass `TITLE_POLICY`.** It was cut from the seed
+  bank, but the policy's harassment clause does not catch opt-in social
+  isolation. Widen it or accept it, deliberately.
+- **`resolutionDeadline` is written at creation and read by nothing.** Nothing
+  expires a bet nobody settles; after the deadline it sits open until a member
+  acts.
+- `src/app/c/[code]/new/page.tsx` still offers a "custom" toggle for `dares`,
+  which now 400s. The error surfaces correctly, but the toggle should be hidden.
 
 ---
 
@@ -222,14 +263,41 @@ the Next app graph, so nothing bundled is affected. `eligibility.ts` imports its
 type with `import type ... from "./market.ts"` — type-only, erased at compile time,
 safe for both the bundler and node.
 
-**`deleteUser` is enabled in `auth.ts` and the delete path is a landmine.**
-Guideline 5.1.1(v) requires in-app account deletion, so the flag is on. But
-`Membership`, `Position`, `Rating` and `Vote` all declare `onDelete: Cascade`
-against `User` — deleting a user destroys other members' financial history — and
-`Bet.creator/subject/opponent` are required relations with no `onDelete`, so
-Postgres will RESTRICT and the delete will simply fail for anyone who has ever been
-in a bet. **Do not ship a delete button until a `beforeDelete` hook anonymizes
-instead of cascading.**
+**Account deletion anonymizes; it must never cascade, and `beforeDelete` cannot
+stop it.** Guideline 5.1.1(v) requires in-app deletion, so `deleteUser` is on.
+
+Every foreign key into `User` is required and non-null, so removing the row has
+only two alternatives and both are wrong. Cascading deletes *other members'*
+positions and votes — money leaves one side of the books with nothing balancing
+it, so invariant 4 breaks by construction. Repointing to a shared tombstone
+collides, because `Position` is unique on `[betId, userId]`: the second person
+to delete hits the first on any bet they both touched.
+
+So the row survives, scrubbed in place. `src/lib/account-deletion.ts` says what
+a scrubbed row contains; Better Auth destroys the `Session` and `Account` rows
+(password hash included) itself. Exactly one row is mutated and no money column
+is touched, which is what makes "every other member's history is byte-identical"
+a guarantee rather than a hope.
+
+**An earlier version of this file prescribed a `beforeDelete` hook. That hook
+provably cannot do the job** — verified against the installed better-auth 1.7.5
+source, not its prose docs. In `dist/api/routes/update-user.mjs` the hook is
+awaited and the delete then runs *unconditionally*, consulting no return value;
+throwing is its only interruption, which would fail the request *after* the
+scrub had committed — PII gone and a 500 returned. The hook that works is
+`databaseHooks.user.delete.before`, which `dist/db/with-hooks.mjs` treats as
+"skip the delete" when it returns `false`. `auth.ts` uses both: `beforeDelete`
+scrubs, the database hook vetoes the row delete.
+
+The veto is deliberately unconditional, so **no `User` row can be deleted by any
+path**, including a future admin tool. That is the same invariant the schema now
+enforces: the four ledger relations are `Restrict`, and `Bet`'s three are
+explicitly `Restrict` — note `Bet.opponent` is optional and was therefore
+defaulting to `SetNull`, which would have silently blanked the opponent out of a
+live head-to-head.
+
+**There is still no delete button.** The path is safe; the UI is not wired, so
+5.1.1(v) is not yet satisfied end to end.
 
 **Do not set `user.modelName` in `auth.ts`.** The adapter already resolves to the
 Prisma model `User` with zero config. A capitalized custom `modelName` trips a
@@ -264,7 +332,14 @@ the runtime path. `npm audit fix` is a no-op that only adds platform binaries to
 lockfile; `--force` installs Next 16, a major bump. Do the Next 16 upgrade
 deliberately, in Phase 4, when the app becomes a pure API backend.
 
-**`seed-data.ts` contains real people's names.** Must go before production.
+**The seed cast is fictional — keep it that way.** `alice`/`bob`/`carol`/`dave`/
+`erin`/`frank`, keys and display names both. Real names were spread much wider
+than this note once implied: they were also in `spark.ts`'s **model prompt**, in
+`market.ts` and `lifecycle.test.ts` comments, and in five scripts that index
+simulation results **by member key** — `story-check.ts` hard-failed on the
+rename and `pick-seed.ts` silently ranked a key that no longer existed. None of
+those scripts run in CI. If you ever rename members again, grep the whole tree,
+not just `seed-data.ts`.
 
 ---
 
@@ -302,6 +377,6 @@ Long-form reasoning, the full gap list and the phased roadmap live in the
 ## Working style
 
 Run `npm test` before and after any change to `market.ts`, `bets.ts`,
-`eligibility.ts`, `circles.ts` or `rate-limit.ts` — those 111 cases are the safety net for the
+`eligibility.ts`, `circles.ts`, `rate-limit.ts` or `moderation.ts` — those 186 cases are the safety net for the
 whole economy.
 New invariants get a pure module and a fuzz test, not an inline `if`.
