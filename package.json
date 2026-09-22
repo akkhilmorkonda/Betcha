@@ -6,7 +6,7 @@
     "db:push": "prisma db push && prisma generate",
     "db:reset": "prisma db push --force-reset && prisma generate && npm run db:seed",
     "db:restore": "node --experimental-strip-types scripts/db-snapshot.ts load",
-    "db:seed": "node --experimental-strip-types --env-file=.env prisma/seed.ts",
+    "db:seed": "node --experimental-strip-types --env-file-if-exists=.env prisma/seed.ts",
     "db:snapshot": "node --experimental-strip-types scripts/db-snapshot.ts save",
     "build": "prisma generate && next build",
     "demo:numbers": "node --experimental-strip-types scripts/demo-numbers.ts",
