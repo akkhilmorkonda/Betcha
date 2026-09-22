@@ -4,7 +4,6 @@ import {
   normalizeInviteCode,
   isWellFormedInviteCode,
   generateInviteCode,
-  validateCircleName,
   canJoinCircle,
   INVITE_CODE_LENGTH,
   MAX_CIRCLE_NAME,
@@ -51,25 +50,9 @@ test("malformed codes are rejected before any database work", () => {
   }
 });
 
-test("circle names are trimmed, and the trimmed form is what gets stored", () => {
-  const r = validateCircleName("  The Group Chat  ");
-  assert.deepEqual(r, { ok: true, name: "The Group Chat" });
-});
-
-test("a whitespace-only name is empty, not valid", () => {
-  assert.equal(validateCircleName("   ").ok, false);
-});
-
-test("names are bounded, and the boundary itself is allowed", () => {
-  assert.equal(validateCircleName("x".repeat(MAX_CIRCLE_NAME)).ok, true);
-  assert.equal(validateCircleName("x".repeat(MAX_CIRCLE_NAME + 1)).ok, false);
-});
-
-test("a non-string name never throws", () => {
-  for (const bad of [null, undefined, 42, {}, [], true]) {
-    assert.equal(validateCircleName(bad).ok, false);
-  }
-});
+// Circle-name rules are enforced by createCircleBody and covered in
+// tests/schemas.test.ts — trimming, empty, whitespace-only, the length bound and
+// non-string input. They are not duplicated here.
 
 test("joining a circle that does not exist is a 404, not a crash", () => {
   const r = canJoinCircle({ circleExists: false, alreadyMember: false, memberCount: 0 });

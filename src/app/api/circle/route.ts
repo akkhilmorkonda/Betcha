@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUserId } from "@/lib/session";
-import {
-  generateInviteCode,
-  validateCircleName,
-  STARTING_BALANCE,
-} from "@/lib/circles";
+import { generateInviteCode, STARTING_BALANCE } from "@/lib/circles";
+import { readBody, rateLimit } from "@/lib/guard";
+import { createCircleBody } from "@/lib/schemas";
 
 /**
  * Create a circle. Half of the onboarding path that did not exist — before this,
@@ -19,15 +17,12 @@ export async function POST(req: Request) {
   const me = await getSessionUserId();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
-  }
+  const limited = rateLimit(req, me, "createCircle");
+  if (limited) return limited;
 
-  const check = validateCircleName((body as { name?: unknown } | null)?.name);
-  if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 400 });
+  const body = await readBody(req, createCircleBody);
+  if (!body.ok) return body.response;
+  const name = body.data.name;
 
   // inviteCode is @unique, so a collision is a constraint violation rather than
   // a silent overwrite. Retry a few times before giving up; at 32^6 codes this
@@ -37,7 +32,7 @@ export async function POST(req: Request) {
     try {
       const circle = await prisma.circle.create({
         data: {
-          name: check.name,
+          name,
           inviteCode,
           memberships: { create: { userId: me, balance: STARTING_BALANCE } },
         },

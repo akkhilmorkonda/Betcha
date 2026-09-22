@@ -21,6 +21,24 @@ export const auth = betterAuth({
 
   emailAndPassword: { enabled: true },
 
+  // Better Auth owns its own routes, so the app's rateLimit guard never sees
+  // them. Sign-in is the one endpoint where unlimited attempts are worth real
+  // money to an attacker, so it gets the tightest rule.
+  //
+  // Storage is in-memory by default, i.e. per-instance and cleared on deploy —
+  // same caveat as src/lib/rate-limit.ts, and the same fix later (a shared
+  // store) when this runs on more than one box.
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 60,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-up/email": { window: 3600, max: 5 },
+      "/forget-password": { window: 3600, max: 5 },
+    },
+  },
+
   // App Store Guideline 5.1.1(v): an app that creates accounts must let people
   // delete them from inside the app. Enabling the flag is the easy half.
   //

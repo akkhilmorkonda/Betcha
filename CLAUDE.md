@@ -12,7 +12,7 @@ your friends will do things; odds come from their track record. Built for HackMI
 
 ```bash
 npm run dev            # next dev
-npm test               # 91 cases, node --test, no DB needed
+npm test               # 111 cases, node --test, no DB needed
 npm run build          # prisma generate && next build
 npm run db:seed        # load the demo circle (+ credential accounts)
 npm run seed:sim       # print the seeded Elo spread without touching the DB
@@ -32,6 +32,9 @@ still call `prisma db push`, which bypasses migration history** — rewrite them
 src/lib/market.ts       pure pricing + Elo. no Prisma. the heart of the product.
 src/lib/eligibility.ts  pure. who may take which side.
 src/lib/circles.ts      pure. invite codes, name rules, join rules.
+src/lib/rate-limit.ts   pure. sliding-window policy, one per action.
+src/lib/schemas.ts      pure. zod shape of every request body.
+src/lib/guard.ts        request-facing. readBody + rateLimit, used by every write route.
 src/lib/session.ts      who is calling. wraps Better Auth. the only identity source.
 src/lib/bets.ts         Prisma-bound orchestration. calls into the two above.
 src/lib/spark.ts        vision-model evidence verdicts.
@@ -97,7 +100,7 @@ wrong, not the test.
 
 Phase 1 of the App Store plan. Auth is wired and the read path is closed.
 
-**Landed and verified (91/91 tests, tsc clean, `next build` clean):**
+**Landed and verified (111/111 tests, tsc clean, `next build` clean):**
 - Self-deal guard (`eligibility.ts` + 10 tests incl. a 20k-case fuzz)
 - `createBet` checks subject and opponent are circle members
 - Head-to-head against yourself refused at creation
@@ -110,6 +113,11 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
   404 as a nonexistent code, so probing can't distinguish the two.
 - **Circle create + join exist.** `POST /api/circle`, `POST /api/circle/[code]/join`.
   Rules live in the pure module `src/lib/circles.ts` with 14 tests.
+- **Every write route validates its body and spends a rate-limit token.**
+  `readBody` + `rateLimit` from `guard.ts`, schemas in `schemas.ts`, policy in
+  `rate-limit.ts`. Schemas are `.strict()`, so an unknown key is a 400 rather
+  than something forwarded to Prisma. Better Auth has its own `rateLimit` for
+  the endpoints it owns; sign-in is 5/min.
 - **Money is integer cents throughout** — schema, engine, API, UI state and
   tests. Conservation is now asserted to the cent rather than within `1e-6`.
   Fixed an edge where `remainingCapacity` could admit a stake that breached the
@@ -125,7 +133,6 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
   default `betcha-dev-password`.
 
 **Still open in Phase 1:**
-- Zod on every route body; rate limiting (there is none)
 - Strip the ngrok/cloudflare allowlists from `next.config.mjs`
 - Bets have no deadline guard on `startVote`: any member can force an open bet
   to a circle vote before its deadline by submitting evidence with no photo.
@@ -142,6 +149,13 @@ mismatch fails every request with P1012 at the Prisma layer, or a silent adapter
 mismatch at the Better Auth layer. `prisma/migrations/` is SQLite-dialect SQL and
 **will not replay against Postgres**: delete the directory and re-cut the initial
 migration when you switch. Nothing should be built on this history.
+
+**Rate limiting is in-process and therefore per-instance.** `src/lib/guard.ts`
+holds a module-level `Map`, and Better Auth's own limiter defaults to memory
+too. Two servers behind a load balancer each allow the full quota, and a deploy
+resets every window. That is honest for one container and wrong for serverless,
+where a cold start is a fresh quota. When this scales horizontally the store
+moves to Redis and only `hit` changes — the policies and their tests do not.
 
 **`.ts` import extensions are load-bearing.** `tests/*.test.ts` and
 `src/lib/seed-data.ts` import with explicit `.ts` because they run under
@@ -225,6 +239,6 @@ Long-form reasoning, the full gap list and the phased roadmap live in the
 ## Working style
 
 Run `npm test` before and after any change to `market.ts`, `bets.ts`,
-`eligibility.ts` or `circles.ts` — those 91 cases are the safety net for the
+`eligibility.ts`, `circles.ts` or `rate-limit.ts` — those 111 cases are the safety net for the
 whole economy.
 New invariants get a pure module and a fuzz test, not an inline `if`.
