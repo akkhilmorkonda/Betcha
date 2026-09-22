@@ -1,18 +1,24 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
+import { auth } from "./auth";
 
-const COOKIE = "bc_user";
-
+/**
+ * The one place the app asks "who is making this request?".
+ *
+ * This used to read a bare `bc_user` cookie holding a user id, written by
+ * POST /api/session. That cookie was unauthenticated: anything that could set
+ * it could become anyone. Both the route and the cookie are gone; identity now
+ * comes from a signed Better Auth session.
+ *
+ * Returns null for a signed-out request. Callers must treat null as
+ * "unauthenticated" and refuse — never as "pick a default user".
+ */
 export async function getSessionUserId(): Promise<string | null> {
-  const jar = await cookies();
-  return jar.get(COOKIE)?.value ?? null;
+  const session = await auth.api.getSession({ headers: await headers() });
+  return session?.user?.id ?? null;
 }
 
-export async function setSessionUserId(userId: string) {
-  const jar = await cookies();
-  jar.set(COOKIE, userId, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
+/** The full session when a route needs the email or name too, not just the id. */
+export async function getSessionUser() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  return session?.user ?? null;
 }

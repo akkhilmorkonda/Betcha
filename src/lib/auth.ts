@@ -15,7 +15,9 @@ import { prisma } from "./db";
  * which is not published yet. Leave this alone until it is.
  */
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, { provider: "postgresql" }),
+  // Must match datasource db.provider in prisma/schema.prisma. Currently sqlite
+  // while local work proceeds; flip both together when Postgres is provisioned.
+  database: prismaAdapter(prisma, { provider: "sqlite" }),
 
   emailAndPassword: { enabled: true },
 

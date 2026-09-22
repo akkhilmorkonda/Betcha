@@ -2,22 +2,31 @@
 
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/Avatar";
-import { MemberSwitcher } from "@/components/MemberSwitcher";
 import { TabBar } from "@/components/TabBar";
 import { money, signed, mult, timeLeft } from "@/lib/format";
 
 export default function CirclePage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
+  const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [c, s] = await Promise.all([
-      fetch(`/api/circle/${code}`).then((r) => r.json()),
+    const [cRes, s] = await Promise.all([
+      fetch(`/api/circle/${code}`),
       fetch("/api/session").then((r) => r.json()),
     ]);
+
+    // Signed out is not "no such circle" — send them somewhere they can act.
+    if (cRes.status === 401) {
+      router.replace(`/signin?next=/c/${code}`);
+      return;
+    }
+
+    const c = await cRes.json();
     if (c.error) {
       setErr(c.error);
       setData(null);
@@ -26,7 +35,7 @@ export default function CirclePage({ params }: { params: Promise<{ code: string 
       setData(c.circle ?? null);
     }
     setMeId(s.user?.id ?? null);
-  }, [code]);
+  }, [code, router]);
 
   useEffect(() => {
     load();
@@ -66,7 +75,7 @@ export default function CirclePage({ params }: { params: Promise<{ code: string 
 
         <header className="flex items-center justify-between">
           <span className="text-lg font-bold tracking-tight">{data.name}</span>
-          <MemberSwitcher members={data.members} currentId={me.userId} onSwitch={load} />
+          <Avatar name={me.name} size={30} />
         </header>
 
         <section>
