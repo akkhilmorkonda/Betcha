@@ -5,6 +5,8 @@ import {
   permittedSide,
   evidenceRefusal,
   maySubmitEvidence,
+  startVoteRefusal,
+  mayStartVote,
 } from "../src/lib/eligibility.ts";
 import type { Side } from "../src/lib/market.ts";
 import { mulberry32 } from "../src/lib/rng.ts";
@@ -200,5 +202,135 @@ test("FUZZ: non-membership refuses across every status, with no exception", () =
       betStatus !== "resolved",
       `member verdict wrong on status ${betStatus}`
     );
+  }
+});
+
+/**
+ * WHO MAY END A BET EARLY.
+ *
+ * The time between now and the deadline belongs to the SUBJECT — it is the
+ * thing being bet on. startVote had no deadline guard at all, so any member
+ * could post an empty evidence submission on Monday and drop a Friday bet to a
+ * circle vote with four days still on it.
+ *
+ * Before the deadline only the subject may call it. After it, any member may.
+ * The proposer is deliberately not given the early exit: they are the
+ * counterparty to every position, usually on "they don't", so "let me end it
+ * before they can do it" is exactly the move this guard exists to stop.
+ */
+
+const HOUR = 3_600_000;
+const NOW = 1_800_000_000_000;
+
+const startVoteArgs = (over: Partial<Parameters<typeof startVoteRefusal>[0]> = {}) => ({
+  isCircleMember: true,
+  isSubject: false,
+  betStatus: "open",
+  deadline: NOW + 4 * HOUR,
+  now: NOW,
+  ...over,
+});
+
+test("a member cannot force an open bet to a vote before its deadline", () => {
+  assert.equal(startVoteRefusal(startVoteArgs()), "before-deadline");
+  assert.equal(mayStartVote(startVoteArgs()), false);
+});
+
+test("the subject may concede early — it is their time to give up", () => {
+  assert.equal(startVoteRefusal(startVoteArgs({ isSubject: true })), null);
+});
+
+/**
+ * The proposer backs the bet with their own money, which buys them the right to
+ * lose it, not the right to call time on it. They are not the subject, so they
+ * are refused by exactly the same branch as anyone else — this test exists so
+ * nobody adds them as an exception later.
+ */
+test("the proposer gets no early exit, however much they have posted", () => {
+  assert.equal(
+    startVoteRefusal(startVoteArgs({ isSubject: false })),
+    "before-deadline",
+    "backing a bet must not buy the right to end it early"
+  );
+});
+
+test("after the deadline any member may put it to the circle", () => {
+  assert.equal(startVoteRefusal(startVoteArgs({ now: NOW + 5 * HOUR })), null);
+  assert.equal(startVoteRefusal(startVoteArgs({ now: NOW + 5 * HOUR, isSubject: true })), null);
+});
+
+test("the deadline instant itself has not passed yet", () => {
+  const at = startVoteArgs({ now: NOW + 4 * HOUR });
+  assert.equal(startVoteRefusal(at), "before-deadline");
+  assert.equal(startVoteRefusal({ ...at, now: NOW + 4 * HOUR + 1 }), null);
+});
+
+test("a non-member is refused before anything else is considered", () => {
+  assert.equal(
+    startVoteRefusal(
+      startVoteArgs({ isCircleMember: false, isSubject: true, now: NOW + 99 * HOUR })
+    ),
+    "not-a-member"
+  );
+});
+
+test("a finished bet cannot be dropped back into a vote", () => {
+  for (const betStatus of ["resolved", "void"]) {
+    assert.equal(
+      startVoteRefusal(startVoteArgs({ betStatus, now: NOW + 99 * HOUR })),
+      "already-finished"
+    );
+  }
+});
+
+/**
+ * Already voting means the time this guard protects is gone either way, and the
+ * evidence route re-enters startVote to attach the model's claim to the
+ * resolution. There is nothing left to protect, so it passes.
+ */
+test("a bet already in a vote is not blocked by the deadline", () => {
+  assert.equal(startVoteRefusal(startVoteArgs({ betStatus: "voting" })), null);
+});
+
+/** A missing or nonsense deadline is not a reason to open the gate. */
+test("a non-finite deadline reads as 'not passed', which is the cautious side", () => {
+  for (const deadline of [NaN, Infinity, -Infinity, undefined as unknown as number]) {
+    assert.equal(startVoteRefusal(startVoteArgs({ deadline })), "before-deadline");
+    assert.equal(startVoteRefusal(startVoteArgs({ deadline, isSubject: true })), null);
+  }
+});
+
+test("FUZZ: nobody but the subject ends a live bet early, on any input", () => {
+  const rand = mulberry32(0x5707e);
+  const statuses = ["open", "pending", "voting", "resolved", "void", "", "garbage"];
+  for (let i = 0; i < 20000; i++) {
+    const isCircleMember = rand() < 0.8;
+    const isSubject = rand() < 0.3;
+    const betStatus = statuses[Math.floor(rand() * statuses.length)];
+    const offset = Math.floor(rand() * 200 * HOUR) - 100 * HOUR;
+    const deadline = NOW + offset;
+    const args = { isCircleMember, isSubject, betStatus, deadline, now: NOW };
+    const r = startVoteRefusal(args);
+
+    if (!isCircleMember) {
+      assert.equal(r, "not-a-member", "a non-member was let near a vote");
+      continue;
+    }
+    if (betStatus === "resolved" || betStatus === "void") {
+      assert.equal(r, "already-finished");
+      continue;
+    }
+    if (betStatus === "voting") {
+      assert.equal(r, null);
+      continue;
+    }
+
+    const passed = NOW > deadline;
+    // THE INVARIANT: a live bet with time left is ended only by its subject.
+    if (!passed && !isSubject)
+      assert.equal(r, "before-deadline", `time was taken from the subject at ${offset}ms`);
+    else assert.equal(r, null, `wrongly refused: passed=${passed} subject=${isSubject}`);
+
+    assert.equal(mayStartVote(args), r === null);
   }
 });

@@ -91,3 +91,91 @@ export function maySubmitEvidence(args: {
 }): boolean {
   return evidenceRefusal(args) === null;
 }
+
+/**
+ * WHO MAY END A BET EARLY, AND WHEN.
+ *
+ * A bet has a deadline, and the time between now and it belongs to the SUBJECT.
+ * It is the whole thing they are being bet on: they have until Friday to run
+ * the five miles, and until Friday they might still do it.
+ *
+ * `startVote` used to have no deadline guard at all, and the evidence route
+ * calls it on two paths that need no photo to reach — a submission with no
+ * image, and a photo Spark could not read. So any member of the circle could
+ * post an empty submission on Monday and drop the bet to a circle vote with
+ * four days left on it. The vote excludes stakeholders, so it is not theft; it
+ * is the subject losing the time they were promised, which is worse than it
+ * sounds when the vote then decides "did they do it" about a thing they still
+ * had four days to do.
+ *
+ * The rule:
+ *
+ *   BEFORE the deadline, only the SUBJECT may force a vote. Conceding is theirs
+ *   to do — it is their time being given up, and it is the one early exit
+ *   nobody can be coerced into. It costs them money rather than making them
+ *   any: eligibility above lets the subject hold only side A, so a subject who
+ *   concedes is conceding their own position. Invariant 8 is untouched.
+ *
+ *   AFTER the deadline, any member of the circle may. The time is spent, the
+ *   bet has to settle, and in a friend group the person with the camera and the
+ *   person who cares about closing it out are usually not the subject.
+ *
+ *   The PROPOSER is deliberately NOT given the early exit, even though they
+ *   back the bet with their own money. They are the counterparty to every
+ *   position — usually on side B, "they don't" — so "let me end it before they
+ *   can do it" is precisely the move the guard exists to stop. Backing a bet
+ *   buys you the right to lose money on it, not the right to call time on it.
+ *
+ * Note what this rule does NOT cover: a photo that Spark reads as clearly true
+ * or clearly false still resolves the bet outright, before the deadline,
+ * submitted by anybody. That is not an early exit, it is the evidence arriving.
+ * If the photo settles the question then the remaining time has nothing left to
+ * do, and refusing it would mean a subject who finishes on Monday has to wait
+ * until Friday to be paid.
+ */
+export type StartVoteRefusal =
+  | "not-a-member"
+  | "already-finished"
+  | "before-deadline"
+  | null;
+
+export function startVoteRefusal(args: {
+  isCircleMember: boolean;
+  /** Is the caller the person the bet is about? */
+  isSubject: boolean;
+  /** pending | open | voting | resolved | void */
+  betStatus: string;
+  /** Epoch ms. */
+  deadline: number;
+  /** Epoch ms. */
+  now: number;
+}): StartVoteRefusal {
+  if (!args.isCircleMember) return "not-a-member";
+  if (args.betStatus === "resolved" || args.betStatus === "void")
+    return "already-finished";
+
+  // Already in a vote: the time this guard protects is gone either way, and the
+  // route re-enters startVote to attach evidence metadata. Nothing to protect.
+  if (args.betStatus === "voting") return null;
+
+  // A non-finite or missing deadline is not a reason to open the gate. Treat it
+  // as "the deadline has not passed", which is the cautious direction.
+  const passed = Number.isFinite(args.deadline) && args.now > args.deadline;
+  if (!passed && !args.isSubject) return "before-deadline";
+  return null;
+}
+
+export function mayStartVote(args: Parameters<typeof startVoteRefusal>[0]): boolean {
+  return startVoteRefusal(args) === null;
+}
+
+export function startVoteRefusalMessage(r: Exclude<StartVoteRefusal, null>): string {
+  switch (r) {
+    case "not-a-member":
+      return "No such bet";
+    case "already-finished":
+      return "This bet is already settled";
+    case "before-deadline":
+      return "This bet still has time left — only the person it's about can call it early.";
+  }
+}
