@@ -15,6 +15,9 @@ import {
   imageModerationConfigured,
   unreviewedTitlesPermitted,
   type TitleVerdictCode,
+  isRetryableStatus,
+  retryDelayMs,
+  CLASSIFIER_MAX_ATTEMPTS,
 } from "../src/lib/moderation.ts";
 import { CATEGORIES } from "../src/lib/categories.ts";
 import { mulberry32 } from "../src/lib/rng.ts";
@@ -630,4 +633,51 @@ test("FUZZ: any environment that is not explicitly development or test fails clo
       `NODE_ENV=${JSON.stringify(e)} took the wrong branch`
     );
   }
+});
+
+/**
+ * RETRY POLICY. A transient 429 must not read as "this title is unsafe".
+ *
+ * Measured before writing this: four identical calls to the real API produced
+ * one 429 and three correct `physical_risk` verdicts. Because the classifier
+ * fails closed, that one 429 refused a bet the model would have judged fine.
+ */
+test("only genuinely transient statuses are retried", () => {
+  for (const s of [408, 429, 500, 502, 503, 504, 599]) {
+    assert.equal(isRetryableStatus(s), true, `${s} should be retried`);
+  }
+  // A bad request or a bad key is not going to fix itself. Retrying hides a
+  // misconfiguration behind latency and fails the same way anyway.
+  for (const s of [200, 201, 400, 401, 403, 404, 409, 422]) {
+    assert.equal(isRetryableStatus(s), false, `${s} must NOT be retried`);
+  }
+});
+
+test("backoff grows, and is capped so a request cannot hang", () => {
+  const a = retryDelayMs(1);
+  const b = retryDelayMs(2);
+  const c = retryDelayMs(3);
+  assert.ok(a < b, "backoff should grow");
+  assert.ok(b <= c, "backoff should not shrink");
+  for (const n of [1, 2, 3, 10, 100]) {
+    assert.ok(retryDelayMs(n) <= 2000, `attempt ${n} exceeded the cap`);
+  }
+});
+
+test("Retry-After is honoured when the server sends a sane one", () => {
+  assert.equal(retryDelayMs(1, "1"), 1000);
+  // Capped: a server asking for an hour must not hang a bet creation.
+  assert.equal(retryDelayMs(1, "3600"), 2000);
+});
+
+test("a junk Retry-After falls back to backoff instead of throwing", () => {
+  for (const bad of ["", "soon", "-5", "0", "NaN", null, undefined]) {
+    const d = retryDelayMs(1, bad as string | null | undefined);
+    assert.ok(Number.isFinite(d) && d > 0 && d <= 2000, `bad value ${JSON.stringify(bad)} gave ${d}`);
+  }
+});
+
+test("attempts are bounded, so failing closed still happens", () => {
+  assert.ok(CLASSIFIER_MAX_ATTEMPTS >= 2, "retrying at all requires >1 attempt");
+  assert.ok(CLASSIFIER_MAX_ATTEMPTS <= 4, "too many attempts turns a refusal into a hang");
 });
