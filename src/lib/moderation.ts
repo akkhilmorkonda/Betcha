@@ -429,9 +429,54 @@ export function interpretTitleVerdict(parsed: any, raw?: unknown): TitleReview {
   };
 }
 
+/**
+ * RETRY POLICY. Pure, so it is testable without a network.
+ *
+ * A burst of bet creations against a low-tier account returns 429, and because
+ * the classifier fails closed a transient 429 refuses a perfectly ordinary bet.
+ * Measured, not theorised: four identical calls in a row produced one 429 and
+ * three correct verdicts.
+ *
+ * Retrying does not weaken the safety property. Attempts are bounded, and when
+ * they are exhausted the call still fails closed exactly as before — this only
+ * removes the case where a refusal meant "the network was busy" rather than
+ * "this title is unsafe".
+ */
+export const CLASSIFIER_MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 250;
+const RETRY_CAP_MS = 2000;
+
+/**
+ * Only statuses that mean "try again". A 400 is a malformed request and a 401
+ * is a bad key — retrying either just burns the user's time before failing the
+ * same way, and hides a misconfiguration behind latency.
+ */
+export function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 429 || (status >= 500 && status < 600);
+}
+
+/**
+ * How long to wait before attempt N. Honours Retry-After when the server sends
+ * a sane one, because the server knows better than a fixed backoff; otherwise
+ * exponential. Always capped, so a server asking for an hour cannot hang a
+ * request.
+ */
+export function retryDelayMs(attempt: number, retryAfter?: string | null): number {
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.min(RETRY_CAP_MS, Math.ceil(seconds * 1000));
+    }
+  }
+  return Math.min(RETRY_CAP_MS, RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1));
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function callTitleClassifier(
   text: string,
-  timeoutMs: number
+  timeoutMs: number,
+  attempt = 1
 ): Promise<TitleReview> {
   const key = process.env.OPENAI_API_KEY!;
   const model = process.env.OPENAI_TITLE_MODEL || "gpt-4o-mini";
@@ -457,7 +502,15 @@ async function callTitleClassifier(
       }),
     });
 
-    if (!res.ok) return titleUnavailable(`classifier returned ${res.status}`);
+    if (!res.ok) {
+      // Transient and attempts left: wait and go again. Otherwise fail closed.
+      if (isRetryableStatus(res.status) && attempt < CLASSIFIER_MAX_ATTEMPTS) {
+        clearTimeout(timer);
+        await sleep(retryDelayMs(attempt, res.headers.get("retry-after")));
+        return callTitleClassifier(text, timeoutMs, attempt + 1);
+      }
+      return titleUnavailable(`classifier returned ${res.status} after ${attempt} attempt(s)`);
+    }
 
     const json = await res.json();
     const content = json?.choices?.[0]?.message?.content;
