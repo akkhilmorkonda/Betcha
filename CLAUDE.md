@@ -171,6 +171,50 @@ resets every window. That is honest for one container and wrong for serverless,
 where a cold start is a fresh quota. When this scales horizontally the store
 moves to Redis and only `hit` changes — the policies and their tests do not.
 
+**Metro will not follow a Windows junction, and that is how npm links workspace
+packages here.** Measured, not guessed — see the spike notes below.
+
+When the Expo client lands in a monorepo, `npm install` links `packages/core`
+into `node_modules`. On Windows a real symlink needs admin or Developer Mode;
+**Developer Mode is off on the dev machine**, so npm falls back to a *junction*.
+Metro's resolver does not traverse junctions, and the bundle dies with
+`Unable to resolve module @betcha/core` — even though the junction reads fine
+from the shell, and even with `--clear`. Swap the junction for a real directory
+and the identical code bundles, which is how this was isolated.
+
+Fix, verified to produce a byte-identical bundle to the non-junction build:
+
+```js
+// metro.config.js
+const core = path.resolve(__dirname, "..", "..", "packages", "core");
+config.watchFolders = [...(config.watchFolders ?? []), core];
+config.resolver.extraNodeModules = { "@betcha/core": core };
+config.resolver.nodeModulesPaths = [
+  ...(config.resolver.nodeModulesPaths ?? []),
+  path.resolve(__dirname, "node_modules"),
+];
+```
+
+All three lines are needed. Without the third, code inside `core` cannot find
+hoisted dependencies (`zod`) and fails one step later, which reads like a
+different bug. Enabling Developer Mode is the alternative, but ship the config
+anyway: it costs nothing on EAS's macOS workers, where symlinks already work,
+and it does not depend on a machine setting.
+
+**What the same spike PROVED IS FINE** — do not re-litigate these:
+`.ts` runtime specifiers resolve under Metro; so does a `"main": "./src/index.ts"`
+entry and a barrel that re-exports through `.ts` specifiers. `market.ts`,
+`schemas.ts`, `circles.ts`, `categories.ts`, `format.ts` and `eligibility.ts`
+bundled as 680 modules, verified by grepping the Hermes output for string
+literals only those files contain. **The `.ts` convention survives the move to
+mobile; the test runner does not need to change.**
+
+Current as of the spike: `expo@57.0.24`, React 19.2.3, RN 0.86.3. The app is on
+React 19.0.0 — that mismatch is exactly why Expo cannot live at the repo root.
+Unproven: a full `npm install` on a real workspace. The spike's workspace install
+truncated at 86 packages with no `metro`, and was worked around rather than
+diagnosed. Watch for it.
+
 **`.ts` import extensions are load-bearing.** `tests/*.test.ts` and
 `src/lib/seed-data.ts` import with explicit `.ts` because they run under
 `node --experimental-strip-types`. Do not "clean them up". `seed-data.ts` is not in
