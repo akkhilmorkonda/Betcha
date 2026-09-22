@@ -15,6 +15,9 @@ import {
   ratingUpdate,
   forecastUpdate,
   DEFAULT_ELO as BASE,
+  CENTS,
+  MIN_STAKE,
+  MIN_LIABILITY,
   type Placed,
 } from "./market.ts";
 import { mulberry32 } from "./rng.ts";
@@ -82,12 +85,13 @@ export const TEMPLATES: SeedTemplate[] = [
 ];
 
 export const BETS_PER_MEMBER_CATEGORY = 13; // proposed; many find no taker
-export const STARTING_BALANCE = 120; // everyone starts the semester with $120
+/** Money here is CENTS, like everywhere else. $120. */
+export const STARTING_BALANCE = 120 * CENTS;
 export const MAX_STAKE_FRACTION = 0.09; // nobody shoves their whole balance in
-export const MAX_STAKE = 26; // dollars
+export const MAX_STAKE = 26 * CENTS;
 /** Share of their balance a proposer is willing to put behind one bet. */
 export const LIABILITY_FRACTION = 0.12;
-export const MAX_LIABILITY_SEED = 36; // friends don't wire four figures at each other
+export const MAX_LIABILITY_SEED = 36 * CENTS; // friends don't wire four figures at each other
 
 export interface SimBet {
   index: number;
@@ -191,7 +195,7 @@ export function simulateHistory(seed = 517, opts: SimOptions = {}): SimResult {
     const proposerSide: "A" | "B" = beliefOf(proposer) > line ? "A" : "B";
     const takerSide: "A" | "B" = proposerSide === "A" ? "B" : "A";
     const liability = Math.max(
-      2,
+      MIN_LIABILITY,
       Math.min(LIAB_CAP, Math.floor(balances[proposer.key] * LIAB_FRAC))
     );
     balances[proposer.key] -= liability; // escrowed the moment they post it
@@ -212,9 +216,9 @@ export function simulateHistory(seed = 517, opts: SimOptions = {}): SimResult {
         const conviction = Math.abs(belief - line);
         const fraction = Math.min(STAKE_FRAC, 0.015 + conviction * 0.38);
         const cap = Math.max(0, Math.floor(balances[b.key] * STAKE_FRAC));
-        const want = Math.min(Math.max(1, Math.round(balances[b.key] * fraction)), cap, STAKE_CAP);
+        const want = Math.min(Math.max(MIN_STAKE, Math.round(balances[b.key] * fraction)), cap, STAKE_CAP);
         // Can't take more than the proposer is still covering.
-        const room = Math.floor(remainingCapacity(taken, takerSide, multiplier, liability));
+        const room = remainingCapacity(taken, takerSide, multiplier, liability);
         const amount = Math.min(want, room);
         if (amount <= 0) return null;
 

@@ -110,6 +110,10 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
   404 as a nonexistent code, so probing can't distinguish the two.
 - **Circle create + join exist.** `POST /api/circle`, `POST /api/circle/[code]/join`.
   Rules live in the pure module `src/lib/circles.ts` with 14 tests.
+- **Money is integer cents throughout** — schema, engine, API, UI state and
+  tests. Conservation is now asserted to the cent rather than within `1e-6`.
+  Fixed an edge where `remainingCapacity` could admit a stake that breached the
+  proposer's cap by a cent.
 - **Evidence submission is authorized, not just authenticated.** The route read
   `me` and then never used it, so anyone holding a bet id could settle a bet
   between six other people. It now requires membership of the bet's circle, via
@@ -121,13 +125,8 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
   default `betcha-dev-password`.
 
 **Still open in Phase 1:**
-- Money `Float` → integer minor units
 - Zod on every route body; rate limiting (there is none)
 - Strip the ngrok/cloudflare allowlists from `next.config.mjs`
-- `Membership.balance` still defaults to `1000` in the schema while
-  `circles.ts` opens new members at `STARTING_BALANCE = 120`. Both paths pass
-  the balance explicitly so the default never fires — but the two numbers
-  disagree and one of them is wrong. Decide which.
 - Bets have no deadline guard on `startVote`: any member can force an open bet
   to a circle vote before its deadline by submitting evidence with no photo.
   The vote itself excludes stakeholders, so this is a nuisance rather than a
@@ -165,9 +164,22 @@ Prisma model `User` with zero config. A capitalized custom `modelName` trips a
 false-positive `SCHEMA_MISMATCH` on better-auth 1.7.3–1.7.5 that fails every auth
 request. Fixed in 1.7.6, unpublished as of 2026-09-22.
 
-**Money is still `Float`** — `Membership.balance`, `Position.amount`,
-`Position.payout`, `Bet.proposerLiability`. Known and scheduled. Float drifts across
-a ledger; move to integer minor units before there is data worth preserving.
+**Money is integer cents.** `Membership.balance`, `Position.amount`,
+`Position.payout`, `Position.balanceAtEntry` and `Bet.proposerLiability` are all
+`Int`. Elo, probabilities and multipliers are genuinely continuous and stay
+`Float` — do not "make them consistent".
+
+Two rules hold this together. `payoutFor` in `market.ts` is **the only place a
+money figure is rounded**; `settleFixed` and `bankPnl` both go through it, which
+is what makes the proposer's loss exactly the negative of the bettors' gain.
+`money()` in `format.ts` is **the only place cents become dollars** — the sole
+correct division by 100 in the codebase. Round anywhere else and conservation
+breaks a cent at a time; divide anywhere else and a figure renders 100x wrong.
+
+`remainingCapacity` floors and then *verifies*, stepping down until admitting the
+stake provably fits under the cap. It does not trust the division, because
+`payoutFor` rounds and the last cent could otherwise breach the proposer's
+backing.
 
 **`npm audit` reports 5 vulnerabilities. Leave them.** All are build/dev-only:
 postcss via next, deepmerge-ts via the prisma CLI (a devDependency). Nothing is in

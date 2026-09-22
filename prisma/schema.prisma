@@ -4,6 +4,10 @@
 // provider stays a one-line change in either direction. Flipped back to sqlite
 // to unblock local work on the Better Auth merge.
 //
+// MONEY IS INTEGER CENTS. balance, proposerLiability, amount, balanceAtEntry and
+// payout are all Int. Elo ratings, probabilities and multipliers are genuinely
+// continuous and stay Float. Nothing stores a fractional amount of money.
+//
 // WARNING: prisma/migrations/ is SQLite-dialect SQL and will NOT replay against
 // Postgres. Before moving to Postgres, delete prisma/migrations/ and re-cut the
 // initial migration. Do not build on this history.
@@ -57,7 +61,7 @@ model Membership {
   id           String   @id @default(cuid())
   userId       String
   circleId     String
-  balance      Float    @default(1000)
+  balance      Int      @default(12000) // cents. $120, matching STARTING_BALANCE.
   forecastElo  Float    @default(1200)
   forecastBets Int      @default(0)
   joinedAt     DateTime @default(now())
@@ -113,7 +117,7 @@ model Bet {
   // lose, escrowed from their balance. Everyone else can only take the other
   // side. Not live until at least one person does.
   proposerSide      String @default("B") // A | B
-  proposerLiability Float  @default(10)
+  proposerLiability Int    @default(2500) // cents
 
   // Frozen at creation so the demo can always show what the line was and why.
   subjectElo    Float
@@ -142,11 +146,11 @@ model Position {
   betId             String
   userId            String
   side              String // A | B
-  amount            Float
+  amount            Int      // cents
   probAtEntry       Float // implied probability of the side taken
   multiplierAtEntry Float
-  balanceAtEntry    Float    @default(0) // bankroll at placement, for conviction weighting
-  payout            Float?
+  balanceAtEntry    Int      @default(0) // cents. Bankroll at placement, for conviction weighting.
+  payout            Int?     // cents
   createdAt         DateTime @default(now())
   bet               Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -12,7 +12,20 @@
  *
  * Each position locks its multiplier at the moment it is placed, like taking a
  * price at a sportsbook. A circle bank is the counterparty, capped per bet.
+ *
+ * MONEY IS INTEGER MINOR UNITS — cents. Every amount, stake, payout, liability
+ * and balance in this file is a whole number of cents, and $1 is 100. Nothing
+ * here ever holds a fractional amount, because a ledger built on floats drifts:
+ * add a third of a cent ten thousand times and the circle no longer sums to
+ * what it started with. Ratings, probabilities and multipliers are NOT money
+ * and stay floating point.
+ *
+ * Render with money() from format.ts, which is the only place cents become a
+ * dollar string.
  */
+
+/** Minor units per major unit. Money crosses into this file already in cents. */
+export const CENTS = 100;
 
 export const DEFAULT_ELO = 1200;
 export const K_SUBJECT = 32; // people move fast
@@ -32,11 +45,11 @@ export const MAX_PROB = 0.95;
  * There is no house. Every dollar a bettor wins comes out of the proposer's
  * escrow, so the circle's total never changes.
  */
-export const DEFAULT_LIABILITY = 25;
-export const MIN_LIABILITY = 2;
-export const MAX_LIABILITY = 150;
+export const DEFAULT_LIABILITY = 25 * CENTS;
+export const MIN_LIABILITY = 2 * CENTS;
+export const MAX_LIABILITY = 150 * CENTS;
 /** Nobody can stake less than this, so a bet must be able to absorb it. */
-export const MIN_STAKE = 1;
+export const MIN_STAKE = 1 * CENTS;
 
 // --- Forecasting rating ---
 // A THIRD rating, separate from skill and challenge. It measures how well you
@@ -49,12 +62,25 @@ export const MAX_CONVICTION = 2;
 
 export type Side = "A" | "B";
 
-/** A placed position, with the price it locked in. */
+/** A placed position, with the price it locked in. `amount` is in cents. */
 export interface Placed {
   userId: string;
   side: Side;
   amount: number;
   multiplier: number;
+}
+
+/**
+ * What a winning stake returns, in whole cents, stake included.
+ *
+ * THE ONE ROUNDING SITE. settleFixed and bankPnl both go through this, so the
+ * proposer's loss is always exactly the negative of what the bettors make — the
+ * two can never disagree by a cent. Round anywhere else and conservation breaks
+ * quietly, a cent at a time, in whichever direction the arithmetic happens to
+ * fall.
+ */
+export function payoutFor(amount: number, multiplier: number): number {
+  return Math.round(amount * multiplier);
 }
 
 /** Standard Elo expectation: probability A beats B. */
@@ -104,7 +130,9 @@ export function bankPnl(positions: Placed[], winner: Side): number {
   let losersStakes = 0;
   let winnersProfit = 0;
   for (const p of positions) {
-    if (p.side === winner) winnersProfit += p.amount * (p.multiplier - 1);
+    // payoutFor, not amount * (multiplier - 1): the bank's loss has to match the
+    // rounded figure the winner is actually paid.
+    if (p.side === winner) winnersProfit += payoutFor(p.amount, p.multiplier) - p.amount;
     else losersStakes += p.amount;
   }
   return losersStakes - winnersProfit;
@@ -128,12 +156,20 @@ export function remainingCapacity(
 ): number {
   if (multiplier <= 1) return Infinity;
   const headroom = cap + bankPnl(positions, side);
-  // Float error leaves a sliver of headroom after the cap is filled exactly.
-  // Without this, sub-cent stakes could be added forever, each one nudging the
-  // proposer a hair past what they agreed to. Treat anything under a
-  // hundredth of a cent as full.
-  if (headroom <= 1e-6) return 0;
-  return headroom / (multiplier - 1);
+  // Integers, so this is exact — the old epsilon guarded against float error
+  // leaving a sliver of headroom after the cap was filled exactly, which let
+  // sub-cent stakes be added forever, each nudging the proposer past what they
+  // agreed to. With cents there is no sliver.
+  if (headroom <= 0) return 0;
+  // Floor, never round: a capacity that rounded up would admit one stake that
+  // pushes the proposer past their backing.
+  let room = Math.floor(headroom / (multiplier - 1));
+  // Then verify rather than trust the division. payoutFor rounds, so the cost of
+  // admitting `room` is round(room * (m-1)), which can land a cent above the
+  // headroom the division implied. The cost rises monotonically with room, so
+  // stepping down until it fits is exact — and terminates in a step or two.
+  while (room > 0 && payoutFor(room, multiplier) - room > headroom) room--;
+  return room;
 }
 
 /**
@@ -159,12 +195,10 @@ export interface Settlement {
 export function settleFixed(positions: Placed[], winner: Side): Settlement {
   const payouts = positions
     .filter((p) => p.side === winner)
-    .map((p) => ({
-      userId: p.userId,
-      stake: p.amount,
-      payout: p.amount * p.multiplier,
-      profit: p.amount * (p.multiplier - 1),
-    }));
+    .map((p) => {
+      const payout = payoutFor(p.amount, p.multiplier);
+      return { userId: p.userId, stake: p.amount, payout, profit: payout - p.amount };
+    });
 
   return {
     payouts,
