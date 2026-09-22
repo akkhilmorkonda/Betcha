@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { placePosition, BetError } from "@/lib/bets";
 import { getSessionUserId } from "@/lib/session";
+import { readBody, rateLimit } from "@/lib/guard";
+import { placePositionBody } from "@/lib/schemas";
 
 export async function POST(
   req: Request,
@@ -8,14 +10,23 @@ export async function POST(
 ) {
   const { id } = await params;
   const me = await getSessionUserId();
-  if (!me) return NextResponse.json({ error: "Pick a member first" }, { status: 401 });
+  if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { side, amount } = await req.json();
-  if (side !== "A" && side !== "B")
-    return NextResponse.json({ error: "Side must be A or B" }, { status: 400 });
+  const limited = rateLimit(req, me, "placePosition");
+  if (limited) return limited;
+
+  // amount was Number(amount) — NaN for anything unparseable, which then flowed
+  // into the balance arithmetic.
+  const body = await readBody(req, placePositionBody);
+  if (!body.ok) return body.response;
 
   try {
-    await placePosition({ betId: id, userId: me, side, amount: Number(amount) });
+    await placePosition({
+      betId: id,
+      userId: me,
+      side: body.data.side,
+      amount: body.data.amount,
+    });
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof BetError) return NextResponse.json({ error: e.message }, { status: 400 });

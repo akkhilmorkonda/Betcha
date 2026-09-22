@@ -7,6 +7,7 @@ import {
   normalizeInviteCode,
   STARTING_BALANCE,
 } from "@/lib/circles";
+import { rateLimit } from "@/lib/guard";
 
 /**
  * Join a circle by invite code. The other half of onboarding.
@@ -15,11 +16,16 @@ import {
  * membership — GET /api/circle/[code] checks membership, not the code.
  */
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   const me = await getSessionUserId();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  // No body to validate, but codes are guessable by construction, so the
+  // attempt rate is what stops someone walking the code space.
+  const limited = rateLimit(req, me, "joinCircle");
+  if (limited) return limited;
 
   const { code } = await params;
   if (!isWellFormedInviteCode(code)) {

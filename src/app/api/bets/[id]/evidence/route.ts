@@ -4,6 +4,8 @@ import { analyzeEvidence } from "@/lib/spark";
 import { resolveBet, startVote, BetError } from "@/lib/bets";
 import { getSessionUserId } from "@/lib/session";
 import { evidenceRefusal } from "@/lib/eligibility";
+import { readBody, rateLimit } from "@/lib/guard";
+import { submitEvidenceBody } from "@/lib/schemas";
 
 /**
  * Photo evidence. Spark either settles it outright or the bet drops to a
@@ -16,6 +18,11 @@ export async function POST(
   const { id } = await params;
   const me = await getSessionUserId();
   if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  // The tightest policy of the six: this calls a paid vision model and can
+  // resolve a bet outright, paying out other members' positions.
+  const limited = rateLimit(req, me, "submitEvidence");
+  if (limited) return limited;
 
   // Authorize BEFORE reading the body. Submitting evidence resolves bets and
   // pays out other members' positions, so the caller must be in the bet's own
@@ -43,24 +50,9 @@ export async function POST(
   if (refusal === "already-resolved")
     return NextResponse.json({ error: "Already resolved" }, { status: 400 });
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Body must be JSON" }, { status: 400 });
-  }
-  const { imageDataUrl } = (body ?? {}) as { imageDataUrl?: unknown };
-
-  // The browser downscales to 1280px before sending. Anything much bigger than
-  // that came from somewhere else and would stall the request, so refuse it
-  // with a message rather than hanging mid-demo.
-  const MAX_UPLOAD = 6_000_000; // ~4.5MB of image
-  if (typeof imageDataUrl === "string" && imageDataUrl.length > MAX_UPLOAD) {
-    return NextResponse.json(
-      { error: "That photo is too large — retake it in the app so it gets resized." },
-      { status: 413 }
-    );
-  }
+  const body = await readBody(req, submitEvidenceBody);
+  if (!body.ok) return body.response;
+  const imageDataUrl = body.data.imageDataUrl;
 
   // "No photo" is a first-class path, not an error. Don't call Spark with nothing.
   if (!imageDataUrl) {
@@ -81,7 +73,7 @@ export async function POST(
   }
 
   const evidence = await analyzeEvidence({
-    imageDataUrl: imageDataUrl as string,
+    imageDataUrl,
     betTitle: bet.title,
     sideALabel: bet.sideALabel,
     sideBLabel: bet.sideBLabel,

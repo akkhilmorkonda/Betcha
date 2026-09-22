@@ -49,19 +49,13 @@ export function generateInviteCode(rand: () => number = Math.random): string {
   return out;
 }
 
-export type NameCheck = { ok: true; name: string } | { ok: false; reason: string };
-
-/** Trims, then bounds. Returns the cleaned name so callers store the trimmed form. */
-export function validateCircleName(raw: unknown): NameCheck {
-  if (typeof raw !== "string") return { ok: false, reason: "Name must be text" };
-  const name = raw.trim();
-  if (name.length === 0) return { ok: false, reason: "Name cannot be empty" };
-  if (name.length > MAX_CIRCLE_NAME) {
-    return { ok: false, reason: `Name cannot exceed ${MAX_CIRCLE_NAME} characters` };
-  }
-  return { ok: true, name };
-}
-
+/**
+ * The name rule itself lives in `createCircleBody` in schemas.ts, which is the
+ * single boundary every request body goes through. This constant is shared with
+ * it so the bound cannot drift between the two. There used to be a
+ * validateCircleName() here as well; it became a second source of truth for the
+ * same rule the moment zod landed, so it is gone.
+ */
 export type JoinCheck = { ok: true } | { ok: false; reason: string; status: number };
 
 /**
