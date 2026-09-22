@@ -1,14 +1,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { betMarket } from "@/lib/bets";
+import { getSessionUserId } from "@/lib/session";
+import { normalizeInviteCode } from "@/lib/circles";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ code: string }> }
 ) {
   const { code } = await params;
+
+  // This endpoint returns every member's balance, ratings, per-category win
+  // record and bet history. It used to require nothing but the invite code, so
+  // a code leaked into a screenshot handed over the whole circle's finances.
+  // Membership is now required, and the code alone is only good for joining.
+  const me = await getSessionUserId();
+  if (!me) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
   const circle = await prisma.circle.findUnique({
-    where: { inviteCode: code.toUpperCase() },
+    where: { inviteCode: normalizeInviteCode(code) },
     include: {
       memberships: { include: { user: { include: { ratings: true } } } },
       bets: {
@@ -26,6 +36,12 @@ export async function GET(
     },
   });
   if (!circle) return NextResponse.json({ error: "No such circle" }, { status: 404 });
+
+  // Same 404 body as a missing circle, deliberately: a non-member probing codes
+  // should not be able to tell "wrong code" from "real circle, not yours".
+  if (!circle.memberships.some((m) => m.userId === me)) {
+    return NextResponse.json({ error: "No such circle" }, { status: 404 });
+  }
 
   // Profit and loss over the last 7 days, per member, for the hero figure.
   const weekAgo = Date.now() - 7 * 86_400_000;
@@ -72,7 +88,7 @@ export async function GET(
           deadline: b.deadline,
           subjectId: b.subjectId,
           creator: b.creator?.name ?? null,
-          proposerSide: b.proposerSide,
+          // proposerSide comes from the ...betMarket(b) spread below.
           // Who's in, for the social row on the feed.
           players: b.positions.map((p) => ({
             userId: p.userId,

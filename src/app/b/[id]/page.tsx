@@ -343,7 +343,10 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
       {(open || pending) && !mine && !sheet && meId !== bet.creatorId && (
         <div className="sticky bottom-0 px-5 pt-3 pb-6 border-t border-edge bg-panel flex flex-col gap-1.5">
           <button
-            onClick={() => setAmount(Math.max(1, Math.min(10, capacityFor(takerSide)))) || setSheet(takerSide)}
+            onClick={() => {
+              setAmount(Math.max(1, Math.min(10, capacityFor(takerSide))));
+              setSheet(takerSide);
+            }}
             className={`w-full py-3.5 rounded-2xl font-bold text-[15px] text-ink ${
               takerSide === "A" ? "bg-yes" : "bg-no"
             }`}

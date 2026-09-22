@@ -2,7 +2,9 @@
  * Loads the demo circle. Ratings come out of simulateHistory(), which runs a
  * hand-written history through the real engine — nothing here is typed by hand.
  */
+import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "better-auth/crypto";
 import {
   MEMBERS,
   TEMPLATES,
@@ -13,6 +15,14 @@ import { lineFor, oddsFrom } from "../src/lib/market.ts";
 
 const prisma = new PrismaClient();
 const INVITE_CODE = "HACKMIT";
+
+// Every seeded member gets a real credential account, because the persona
+// swap that used to fake identity is gone. Without this the demo circle would
+// exist but be unreachable: no password, no way in.
+//
+// Dev fixture only. Override with SEED_PASSWORD, and never let this default
+// reach an environment that has real users in it.
+const SEED_PASSWORD = process.env.SEED_PASSWORD ?? "betcha-dev-password";
 const daysAgoDate = (d: number) => new Date(Date.now() - d * 86_400_000);
 
 async function main() {
@@ -26,6 +36,8 @@ async function main() {
   await prisma.membership.deleteMany();
   await prisma.challengeTemplate.deleteMany();
   await prisma.circle.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.account.deleteMany();
   await prisma.user.deleteMany();
 
   const sim = simulateHistory();
@@ -67,9 +79,30 @@ async function main() {
   const userId: Record<string, string> = {};
   for (const m of MEMBERS) {
     const u = await prisma.user.create({
-      data: { name: m.name, avatarSeed: m.key },
+      // email is required and unique now that Better Auth shares this table.
+      // .invalid is reserved by RFC 2606 and can never resolve, so seeded
+      // accounts can't be mistaken for real ones or be mailed by accident —
+      // but they ARE signed in as, with SEED_PASSWORD, now that the persona
+      // swap is gone and a credential is the only way to become someone.
+      data: {
+        name: m.name,
+        avatarSeed: m.key,
+        email: `${m.key}@seed.invalid`,
+        emailVerified: true,
+      },
     });
     userId[m.key] = u.id;
+    // Credential account, hashed with Better Auth's own hasher so the row is
+    // byte-compatible with what a real sign-up would have written.
+    await prisma.account.create({
+      data: {
+        id: randomUUID(),
+        accountId: u.id,
+        providerId: "credential",
+        userId: u.id,
+        password: await hashPassword(SEED_PASSWORD),
+      },
+    });
     await prisma.membership.create({
       data: {
         userId: u.id,

@@ -1,6 +1,12 @@
-// Betcha — SQLite for local/hackathon speed.
-// To ship on Postgres: change provider to "postgresql" and point DATABASE_URL at it.
-// Schema deliberately avoids enums and arrays so the port is a one-line change.
+// Betcha — SQLite (temporary; Postgres is the destination).
+//
+// The schema avoids enums, scalar arrays, Json and native @db. types so the
+// provider stays a one-line change in either direction. Flipped back to sqlite
+// to unblock local work on the Better Auth merge.
+//
+// WARNING: prisma/migrations/ is SQLite-dialect SQL and will NOT replay against
+// Postgres. Before moving to Postgres, delete prisma/migrations/ and re-cut the
+// initial migration. Do not build on this history.
 
 generator client {
   provider = "prisma-client-js"
@@ -32,27 +38,38 @@ model User {
   betsCreated    Bet[]        @relation("creator")
   betsAsSubject  Bet[]        @relation("subject")
   betsAsOpponent Bet[]        @relation("opponent")
+  email          String
+  emailVerified  Boolean      @default(false)
+  image          String?
+  updatedAt      DateTime     @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+
+  @@unique([email])
+  @@map("user")
 }
 
 // Balance is per-circle: currency never crosses circles. So is the forecasting
 // rating — how well you call OTHER people's bets. It is not skill, and unlike
 // balance it cannot be inflated by betting more or being rich.
+
 model Membership {
-  id            String   @id @default(cuid())
-  userId        String
-  circleId      String
-  balance       Float    @default(1000)
-  forecastElo   Float    @default(1200)
-  forecastBets  Int      @default(0)
-  joinedAt      DateTime @default(now())
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  circle   Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  userId       String
+  circleId     String
+  balance      Float    @default(1000)
+  forecastElo  Float    @default(1200)
+  forecastBets Int      @default(0)
+  joinedAt     DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  circle       Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, circleId])
 }
 
 // SKILL rating: how good this person is at the thing, per category.
 // This is what prices bets ABOUT them. It is not a forecasting rating.
+
 model Rating {
   id       String @id @default(cuid())
   userId   String
@@ -67,6 +84,7 @@ model Rating {
 
 // The opponent for solo bets. Carries its own rating and self-calibrates
 // across the circle every time it resolves, like a chess puzzle rating.
+
 model ChallengeTemplate {
   id            String   @id @default(cuid())
   category      String
@@ -78,17 +96,18 @@ model ChallengeTemplate {
 }
 
 // Side A is always "the subject succeeds". Side B is always "they don't".
+
 model Bet {
-  id            String   @id @default(cuid())
-  circleId      String
-  creatorId     String
-  subjectId     String
-  opponentId    String? // set for head-to-head bets; null for solo-vs-challenge
-  templateId    String? // set for solo-vs-challenge bets
-  title         String
-  category      String
-  sideALabel    String
-  sideBLabel    String
+  id         String  @id @default(cuid())
+  circleId   String
+  creatorId  String
+  subjectId  String
+  opponentId String? // set for head-to-head bets; null for solo-vs-challenge
+  templateId String? // set for solo-vs-challenge bets
+  title      String
+  category   String
+  sideALabel String
+  sideBLabel String
 
   // The proposer picks a SIDE and backs it with the most they are willing to
   // lose, escrowed from their balance. Everyone else can only take the other
@@ -126,7 +145,7 @@ model Position {
   amount            Float
   probAtEntry       Float // implied probability of the side taken
   multiplierAtEntry Float
-  balanceAtEntry    Float  @default(0) // bankroll at placement, for conviction weighting
+  balanceAtEntry    Float    @default(0) // bankroll at placement, for conviction weighting
   payout            Float?
   createdAt         DateTime @default(now())
   bet               Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
@@ -137,20 +156,21 @@ model Position {
 }
 
 model Resolution {
-  id             String   @id @default(cuid())
-  betId          String   @unique
-  method         String // evidence | vote
-  finalOutcome   String // A | B | void
-  evidenceUrl    String?
-  sparkClaim     String?
+  id              String   @id @default(cuid())
+  betId           String   @unique
+  method          String // evidence | vote
+  finalOutcome    String // A | B | void
+  evidenceUrl     String?
+  sparkClaim      String?
   sparkConfidence Float?
-  disputed       Boolean  @default(false)
-  resolvedAt     DateTime @default(now())
-  bet            Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
-  votes          Vote[]
+  disputed        Boolean  @default(false)
+  resolvedAt      DateTime @default(now())
+  bet             Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
+  votes           Vote[]
 }
 
 // Only members with no position in the bet may vote.
+
 model Vote {
   id           String     @id @default(cuid())
   resolutionId String
@@ -164,6 +184,7 @@ model Vote {
 }
 
 // Audit trail so the demo can show a rating moving and say exactly why.
+
 model EloEvent {
   id         String   @id @default(cuid())
   betId      String
@@ -174,4 +195,52 @@ model EloEvent {
   after      Float
   createdAt  DateTime @default(now())
   bet        Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }

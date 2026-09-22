@@ -42,7 +42,8 @@ export async function GET(
       subject: { id: bet.subject.id, name: bet.subject.name },
       creatorId: bet.creatorId,
       creator: { id: bet.creator.id, name: bet.creator.name },
-      proposerSide: bet.proposerSide,
+      // proposerSide comes from the ...betMarket(bet) spread below, which
+      // narrows it to Side. Setting it here too just got overwritten.
       opponent: bet.opponent ? { id: bet.opponent.id, name: bet.opponent.name } : null,
       template: bet.template ? { text: bet.template.text, timesUsed: bet.template.timesUsed } : null,
       // Plain-language backing for the "why this price" disclosure.
