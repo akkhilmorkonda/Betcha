@@ -1,29 +1,29 @@
-/** Akkhil's worked example, through the real engine. */
+/** Alice's worked example, through the real engine. */
 import { lineFor, oddsFrom, settleFixed, bankPnl, remainingCapacity, type Placed } from "../src/lib/market.ts";
 import { money } from "../src/lib/format.ts";
 
-const AKKHIL = 1106, YAXIN = 1204;   // current sports ratings
+const ALICE = 1106, CAROL = 1204;   // current sports ratings
 const MAX_POT = 50;                   // what the house says it will lose
 
-// House = Akkhil, stance "Akkhil beats Yaxin". Head to head, so the opponent's
+// House = Alice, stance "Alice beats Carol". Head to head, so the opponent's
 // rating is the difficulty.
-const p = lineFor(AKKHIL, YAXIN);
+const p = lineFor(ALICE, CAROL);
 const odds = oddsFrom(p);
-console.log(`\n  Akkhil ${AKKHIL}  vs  Yaxin ${YAXIN}`);
-console.log(`  house says Akkhil wins -> ${(p * 100).toFixed(1)}%`);
+console.log(`\n  Alice ${ALICE}  vs  Carol ${CAROL}`);
+console.log(`  house says Alice wins -> ${(p * 100).toFixed(1)}%`);
 console.log(`  so betting AGAINST the house pays ${odds.multiplierB.toFixed(3)}x\n`);
 
-// Yaxin backs herself for $10.
-const yaxin: Placed = { userId: "yaxin", side: "B", amount: 10, multiplier: odds.multiplierB };
+// Carol backs herself for $10.
+const carol: Placed = { userId: "carol", side: "B", amount: 10, multiplier: odds.multiplierB };
 
-console.log("  YAXIN WINS:");
-const win = settleFixed([yaxin], "B");
-console.log(`    yaxin gets ${money(win.payouts[0].payout)}  (her ${money(10)} back + ${money(win.payouts[0].profit)})`);
+console.log("  CAROL WINS:");
+const win = settleFixed([carol], "B");
+console.log(`    carol gets ${money(win.payouts[0].payout)}  (her ${money(10)} back + ${money(win.payouts[0].profit)})`);
 console.log(`    house      ${money(win.bankPnl)}\n`);
 
-console.log("  AKKHIL WINS:");
-const lose = settleFixed([yaxin], "A");
-console.log(`    yaxin loses ${money(10)}`);
+console.log("  ALICE WINS:");
+const lose = settleFixed([carol], "A");
+console.log(`    carol loses ${money(10)}`);
 console.log(`    house       ${money(lose.bankPnl)}\n`);
 
 console.log("  --- WHERE THE CAP GOES ---\n");

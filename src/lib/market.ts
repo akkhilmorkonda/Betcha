@@ -249,8 +249,8 @@ export function ratingUpdate(
 /**
  * How hard a stake was to make, as a multiple of a normal call.
  *
- * Scaled by fraction of bankroll, not absolute size: Marcus staking 100 of his
- * 1,103 is a bigger call than Dev staking 100 of his 3,395, and the rating
+ * Scaled by fraction of bankroll, not absolute size: Frank staking 100 of his
+ * 1,103 is a bigger call than Dave staking 100 of his 3,395, and the rating
  * should say so. Clamped so one all-in can never rewrite someone's rating.
  */
 export function convictionWeight(stake: number, balanceAtPlacement: number): number {

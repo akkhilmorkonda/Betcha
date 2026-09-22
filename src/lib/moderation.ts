@@ -58,7 +58,7 @@
  *   a silent allow — it is defences 1 and 2 without defence 3, which is the
  *   honest description of a machine with no API key. Refusing every title
  *   instead would mean no bet can be created at all without a paid key, and the
- *   no-key path is the one CI and local dev actually run.
+ *   no-key path is the one CI and local dave actually run.
  *
  *   TITLES, key present but the call fails: REFUSE. A configured key is the
  *   operator saying "this check runs". A timeout must not silently downgrade

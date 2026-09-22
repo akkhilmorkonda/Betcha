@@ -74,7 +74,7 @@ const dataUrl = `data:${mime};base64,${b64}`;
 
 const result = await analyzeEvidence({
   imageDataUrl: dataUrl,
-  betTitle: "Akkhil runs 5 miles under 40 minutes",
+  betTitle: "Alice runs 5 miles under 40 minutes",
   sideALabel: "He did it",
   sideBLabel: "He didn't",
 });

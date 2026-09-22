@@ -1,7 +1,7 @@
 /**
  * Search RNG seeds for a demo circle that is both legible AND on-story:
- *   - Akkhil clearly best at grades, clearly worst at dares
- *   - Dev tops the forecasting rating (he has the highest hidden edge)
+ *   - Alice clearly best at grades, clearly worst at dares
+ *   - Dave tops the forecasting rating (he has the highest hidden edge)
  *   - visible spread on every dimension, no runaway balance
  */
 import { MEMBERS, simulateHistory } from "../src/lib/seed-data.ts";
@@ -18,11 +18,11 @@ for (let seed = 1; seed <= 4000; seed++) {
 
   const byCat = (c: string) =>
     Object.fromEntries(MEMBERS.map((m) => [m.key, ratings[m.key][c]]));
-  const gradesRank = rank(byCat("grades"), "akkhil");
-  const daresRank = rank(byCat("dares"), "akkhil");
+  const gradesRank = rank(byCat("grades"), "alice");
+  const daresRank = rank(byCat("dares"), "alice");
   const fcRank = rank(
     Object.fromEntries(MEMBERS.map((m) => [m.key, forecast[m.key].elo])),
-    "dev"
+    "dave"
   );
 
   // Story must hold exactly, or the seed is out.
@@ -43,8 +43,8 @@ for (let seed = 1; seed <= 4000; seed++) {
   rows.push({
     seed,
     score: minSkill + fcSpread,
-    g: Math.round(ratings.akkhil.grades),
-    d: Math.round(ratings.akkhil.dares),
+    g: Math.round(ratings.alice.grades),
+    d: Math.round(ratings.alice.dares),
     sk: Math.round(minSkill),
     fc: Math.round(fcSpread),
     bal: Math.round(maxBal),
@@ -53,7 +53,7 @@ for (let seed = 1; seed <= 4000; seed++) {
 
 rows.sort((a, b) => b.score - a.score);
 console.log(`\n  ${rows.length} seeds satisfy the story out of 4000\n`);
-console.log("  seed     akkhil grades   akkhil dares   min skill   forecast   top bal");
+console.log("  seed     alice grades   alice dares   min skill   forecast   top bal");
 for (const r of rows.slice(0, 8)) {
   console.log(
     "  " + String(r.seed).padEnd(9) +

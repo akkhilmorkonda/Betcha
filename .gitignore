@@ -28,3 +28,6 @@ public/track.mp3
 .claude/settings.local.json
 .DS_Store
 Thumbs.db
+
+# Agent worktrees are local scratch, never committed.
+.claude/worktrees/

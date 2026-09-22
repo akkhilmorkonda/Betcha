@@ -28,7 +28,7 @@ import { mulberry32 } from "../src/lib/rng.ts";
  * on a float, which is invariant 9 applied to a second and third model.
  */
 
-// No key in CI, no key in local dev, and none invented here. Everything below
+// No key in CI, no key in local dave, and none invented here. Everything below
 // that does not stub fetch runs the path the project actually runs.
 delete process.env.OPENAI_API_KEY;
 
@@ -123,34 +123,34 @@ test("the policy names every refusing verdict the gate knows about", () => {
 
 test("the offline policy refuses self-harm however it is phrased", () => {
   for (const t of [
-    "Akkhil says he'll kill himself if he fails",
-    "Shash goes a week without self-harm",
-    "Priya beats her anorexia streak",
-    "Dev overdoses on caffeine pills",
-    "Marcus hangs himself from the rafters",
+    "Alice says he'll kill himself if he fails",
+    "Bob goes a week without self-harm",
+    "Erin beats her anorexia streak",
+    "Dave overdoses on caffeine pills",
+    "Frank hangs himself from the rafters",
   ]) {
     assert.equal(localTitleRefusal(t), "self_harm", `allowed: ${t}`);
   }
 });
 
 test("the offline policy refuses the unambiguous physical-risk phrasings", () => {
-  assert.equal(localTitleRefusal("Dev drinks bleach for $5"), "physical_risk");
-  assert.equal(localTitleRefusal("Marcus eats a tide pod"), "physical_risk");
-  assert.equal(localTitleRefusal("Shash jumps off the roof into the pool"), "physical_risk");
-  assert.equal(localTitleRefusal("Yaxin runs into traffic on Mass Ave"), "physical_risk");
-  assert.equal(localTitleRefusal("Akkhil gets blackout drunk before the exam"), "physical_risk");
+  assert.equal(localTitleRefusal("Dave drinks bleach for $5"), "physical_risk");
+  assert.equal(localTitleRefusal("Frank eats a tide pod"), "physical_risk");
+  assert.equal(localTitleRefusal("Bob jumps off the roof into the pool"), "physical_risk");
+  assert.equal(localTitleRefusal("Carol runs into traffic on Mass Ave"), "physical_risk");
+  assert.equal(localTitleRefusal("Alice gets blackout drunk before the exam"), "physical_risk");
 });
 
 test("the offline policy refuses the unambiguous illegal and sexual phrasings", () => {
-  assert.equal(localTitleRefusal("Priya shoplifts from the CVS"), "illegal");
-  assert.equal(localTitleRefusal("Dev trespasses on the roof of Building 10"), "illegal");
-  assert.equal(localTitleRefusal("Marcus sends nudes to the group chat"), "sexual");
-  assert.equal(localTitleRefusal("Shash gets naked in the Infinite"), "sexual");
+  assert.equal(localTitleRefusal("Erin shoplifts from the CVS"), "illegal");
+  assert.equal(localTitleRefusal("Dave trespasses on the roof of Building 10"), "illegal");
+  assert.equal(localTitleRefusal("Frank sends nudes to the group chat"), "sexual");
+  assert.equal(localTitleRefusal("Bob gets naked in the Infinite"), "sexual");
 });
 
 test("curly quotes and odd spacing do not evade the offline policy", () => {
-  assert.equal(localTitleRefusal("Akkhil   KILLS   HIMSELF   at trivia"), "self_harm");
-  assert.equal(localTitleRefusal("Dev’ll shoplift a Red Bull"), "illegal");
+  assert.equal(localTitleRefusal("Alice   KILLS   HIMSELF   at trivia"), "self_harm");
+  assert.equal(localTitleRefusal("Dave’ll shoplift a Red Bull"), "illegal");
 });
 
 /**
@@ -161,18 +161,18 @@ test("curly quotes and odd spacing do not evade the offline policy", () => {
  */
 test("ordinary bets are not touched by the offline policy", () => {
   for (const t of [
-    "Akkhil gets an A on 6.006",
-    "Shash beats Yaxin at the math game",
-    "Priya finishes the problem set before midnight",
-    "Marcus steals second base",
-    "Dev kills it at the career fair",
-    "Yaxin runs 5 miles under 40 minutes",
-    "Akkhil goes a week without Instagram",
-    "Shash does karaoke stone cold sober",
-    "Dev wakes up at 5am three days straight",
-    "Priya wins her intramural soccer final",
-    "Marcus does 100 pushups in one sitting",
-    "Yaxin goes a full day without caffeine",
+    "Alice gets an A on 6.006",
+    "Bob beats Carol at the math game",
+    "Erin finishes the problem set before midnight",
+    "Frank steals second base",
+    "Dave kills it at the career fair",
+    "Carol runs 5 miles under 40 minutes",
+    "Alice goes a week without Instagram",
+    "Bob does karaoke stone cold sober",
+    "Dave wakes up at 5am three days straight",
+    "Erin wins her intramural soccer final",
+    "Frank does 100 pushups in one sitting",
+    "Carol goes a full day without caffeine",
   ]) {
     assert.equal(localTitleRefusal(t), null, `falsely refused: ${t}`);
   }
@@ -414,7 +414,7 @@ test("every result in a multi-result response is checked, not just the first", (
 });
 
 // ---------------------------------------------------------------------------
-// 5. The no-key path — the one CI and local dev actually run.
+// 5. The no-key path — the one CI and local dave actually run.
 // ---------------------------------------------------------------------------
 
 test("with no key, neither check reports itself as configured", () => {
@@ -440,7 +440,7 @@ test("with no key a photo is REFUSED, never quietly accepted", async () => {
  * refused with no key, no network and no spend.
  */
 test("with no key the offline policy still refuses what it knows", async () => {
-  const r = await reviewTitle({ text: "Dev drinks bleach for $5" });
+  const r = await reviewTitle({ text: "Dave drinks bleach for $5" });
   assert.equal(r.decision, "refuse");
   assert.equal(r.source, "policy");
   assert.equal(r.reviewed, false);
@@ -452,7 +452,7 @@ test("with no key the offline policy still refuses what it knows", async () => {
  * That is the difference between this and a silent allow.
  */
 test("with no key an ordinary title is allowed, but marked unreviewed", async () => {
-  const r = await reviewTitle({ text: "Akkhil gets an A on 6.006" });
+  const r = await reviewTitle({ text: "Alice gets an A on 6.006" });
   assert.equal(r.decision, "allow");
   assert.equal(r.reviewed, false);
   assert.equal(r.source, "unreviewed");
@@ -465,7 +465,7 @@ test("the offline policy runs first, so a refused title never costs a model call
     throw new Error("the classifier must not have been called");
   }) as typeof fetch;
   try {
-    const r = await reviewTitle({ text: "Marcus eats a tide pod" });
+    const r = await reviewTitle({ text: "Frank eats a tide pod" });
     assert.equal(r.decision, "refuse");
     assert.equal(r.source, "policy");
   } finally {
@@ -502,7 +502,7 @@ const chat = (payload: unknown) =>
 test("a configured classifier that says safe allows, and says it reviewed it", async () => {
   const r = await withFetch(
     async () => chat({ verdict: "safe", confidence: 0.42, reason: "" }),
-    () => reviewTitle({ text: "Akkhil gets an A on 6.006" })
+    () => reviewTitle({ text: "Alice gets an A on 6.006" })
   );
   assert.equal(r.decision, "allow");
   assert.equal(r.reviewed, true);
@@ -512,10 +512,10 @@ test("a configured classifier that says safe allows, and says it reviewed it", a
 test("a configured classifier catches what the offline list cannot", async () => {
   // The offline list deliberately does NOT know "cold plunge" — that is a
   // judgement call, and it is the classifier's job.
-  assert.equal(localTitleRefusal("Akkhil cold-plunges for 3 minutes"), null);
+  assert.equal(localTitleRefusal("Alice cold-plunges for 3 minutes"), null);
   const r = await withFetch(
     async () => chat({ verdict: "physical_risk", confidence: 0.2, reason: "Cold exposure." }),
-    () => reviewTitle({ text: "Akkhil cold-plunges for 3 minutes" })
+    () => reviewTitle({ text: "Alice cold-plunges for 3 minutes" })
   );
   assert.equal(r.decision, "refuse");
   assert.equal(r.reason, "Cold exposure.");
@@ -536,7 +536,7 @@ test("a configured classifier that errors REFUSES rather than falling back", asy
     async () => jsonResponse({ choices: [] }),
     async () => jsonResponse({ choices: [{ message: { content: "not json" } }] }),
   ]) {
-    const r = await withFetch(impl, () => reviewTitle({ text: "Akkhil gets an A" }));
+    const r = await withFetch(impl, () => reviewTitle({ text: "Alice gets an A" }));
     assert.equal(r.decision, "refuse", "a failed classifier call allowed a title");
     assert.equal(r.reviewed, false);
   }
