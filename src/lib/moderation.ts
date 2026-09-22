@@ -318,6 +318,49 @@ export function titleClassifierConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
 }
 
+/**
+ * May a title be ALLOWED when no classifier key is configured?
+ *
+ * Pure, so the rule is testable without an environment. The answer is no
+ * outside development.
+ *
+ * The keyless path (`unreviewedAllow`) exists so CI and a laptop can create a
+ * bet without a paid key. That is a convenience, and in production it is a
+ * liability: a key that is missing, revoked, mistyped or simply never set on a
+ * new host would silently downgrade the whole title defence to the small
+ * offline keyword list, with nothing in the response saying the check had
+ * stopped running. `custom` is an unconstrained free-text category, so that
+ * downgrade is exactly the gap Guideline 1.4.5 cares about.
+ *
+ * So: fail closed everywhere except development. An operator who wants bets
+ * created without a classifier can run with NODE_ENV=development, which is not
+ * something you reach by accident.
+ */
+export function unreviewedTitlesPermitted(
+  // Deliberately `string | undefined`, not Node's narrow NODE_ENV union. At
+  // runtime this is whatever the host set — "staging", "prod", a typo — and the
+  // whole point is that anything unrecognised fails closed. Typing it narrowly
+  // would hide the cases the fuzz exists to cover.
+  nodeEnv: string | undefined = process.env.NODE_ENV
+): boolean {
+  return nodeEnv === "development" || nodeEnv === "test" || nodeEnv === undefined;
+}
+
+/**
+ * Production has no classifier. Refuse rather than allow: see
+ * `unreviewedTitlesPermitted` for why this is not the same as being cautious.
+ */
+function titleUnconfigured(): TitleReview {
+  return {
+    decision: "refuse",
+    code: "unclear",
+    reviewed: false,
+    source: "unreviewed",
+    reason: "Bets can't be checked for safety right now, so they can't be created.",
+    confidence: 0,
+  };
+}
+
 export function imageModerationConfigured(): boolean {
   return Boolean(process.env.OPENAI_API_KEY);
 }
@@ -486,7 +529,9 @@ export async function reviewTitle(opts: {
     };
   }
 
-  if (!titleClassifierConfigured()) return unreviewedAllow();
+  if (!titleClassifierConfigured()) {
+    return unreviewedTitlesPermitted() ? unreviewedAllow() : titleUnconfigured();
+  }
   return callTitleClassifier(opts.text, opts.timeoutMs ?? 10000);
 }
 
