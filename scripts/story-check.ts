@@ -17,10 +17,10 @@ for (const m of MEMBERS) {
 const byCat = (c: string) => Object.fromEntries(MEMBERS.map((m) => [m.key, sim.ratings[m.key][c]]));
 const fc = Object.fromEntries(MEMBERS.map((m) => [m.key, sim.forecast[m.key].elo]));
 console.log("\n  STORY CHECK");
-console.log(`    akkhil best at grades   ${rk(byCat("grades"), "akkhil") === 0 ? "YES" : "no  (rank " + (rk(byCat("grades"), "akkhil") + 1) + ")"}`);
-console.log(`    akkhil worst at dares   ${rk(byCat("dares"), "akkhil") === 5 ? "YES" : "no  (rank " + (rk(byCat("dares"), "akkhil") + 1) + ")"}`);
-console.log(`    akkhil dares record     ${sim.record.akkhil.dares.wins}-${sim.record.akkhil.dares.losses}`);
-console.log(`    dev tops forecasting    ${rk(fc, "dev") === 0 ? "YES" : "no  (rank " + (rk(fc, "dev") + 1) + ")"}`);
+console.log(`    alice best at grades   ${rk(byCat("grades"), "alice") === 0 ? "YES" : "no  (rank " + (rk(byCat("grades"), "alice") + 1) + ")"}`);
+console.log(`    alice worst at dares   ${rk(byCat("dares"), "alice") === 5 ? "YES" : "no  (rank " + (rk(byCat("dares"), "alice") + 1) + ")"}`);
+console.log(`    alice dares record     ${sim.record.alice.dares.wins}-${sim.record.alice.dares.losses}`);
+console.log(`    dave tops forecasting    ${rk(fc, "dave") === 0 ? "YES" : "no  (rank " + (rk(fc, "dave") + 1) + ")"}`);
 for (const c of cats) {
   const v = MEMBERS.map((m) => sim.ratings[m.key][c]);
   console.log(`    ${c.padEnd(8)} spread       ${Math.round(Math.max(...v) - Math.min(...v))}`);

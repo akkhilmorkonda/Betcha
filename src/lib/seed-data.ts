@@ -34,13 +34,27 @@ export interface SeedMember {
   edge: number;
 }
 
+/**
+ * The cast is deliberately the canonical fictional one — Alice, Bob, Carol,
+ * Dave, Erin, Frank. It used to be the names of the people who built this at
+ * the hackathon, which is real personal data sitting in a fixture that ships.
+ *
+ * The `key` is load-bearing in a way the name is not: it becomes
+ * `${key}@seed.invalid` and `User.avatarSeed` in prisma/seed.ts, so renaming
+ * only the display name would have left the real names embedded in every
+ * seeded email address and avatar. Keys and names changed together.
+ *
+ * Order and the hidden numbers are untouched on purpose: simulateHistory()
+ * walks MEMBERS in array order and the RNG is seeded, so the history these
+ * six produce is decided by trueSkill/edge, not by what they are called.
+ */
 export const MEMBERS: SeedMember[] = [
-  { key: "akkhil", name: "Akkhil", trueSkill: { grades: 1560, sports: 1180, dares: 1040 }, edge: 0.34 },
-  { key: "shash", name: "Shash", trueSkill: { grades: 1230, sports: 1540, dares: 1320 }, edge: 0.42 },
-  { key: "yaxin", name: "Yaxin", trueSkill: { grades: 1390, sports: 1210, dares: 1580 }, edge: 0.22 },
-  { key: "dev", name: "Dev", trueSkill: { grades: 1140, sports: 1430, dares: 1250 }, edge: 0.82 },
-  { key: "priya", name: "Priya", trueSkill: { grades: 1470, sports: 1070, dares: 1160 }, edge: 0.55 },
-  { key: "marcus", name: "Marcus", trueSkill: { grades: 1060, sports: 1340, dares: 1490 }, edge: 0.06 },
+  { key: "alice", name: "Alice", trueSkill: { grades: 1560, sports: 1180, dares: 1040 }, edge: 0.34 },
+  { key: "bob", name: "Bob", trueSkill: { grades: 1230, sports: 1540, dares: 1320 }, edge: 0.42 },
+  { key: "carol", name: "Carol", trueSkill: { grades: 1390, sports: 1210, dares: 1580 }, edge: 0.22 },
+  { key: "dave", name: "Dave", trueSkill: { grades: 1140, sports: 1430, dares: 1250 }, edge: 0.82 },
+  { key: "erin", name: "Erin", trueSkill: { grades: 1470, sports: 1070, dares: 1160 }, edge: 0.55 },
+  { key: "frank", name: "Frank", trueSkill: { grades: 1060, sports: 1340, dares: 1490 }, edge: 0.06 },
 ];
 
 export interface SeedTemplate {
@@ -73,15 +87,25 @@ export const TEMPLATES: SeedTemplate[] = [
   { key: "s8", category: "sports", text: "{subject} hits 12k steps a day for 5 days", difficultyElo: 1280 },
   { key: "s9", category: "sports", text: "{subject} swims 20 laps without stopping", difficultyElo: 1500 },
   // dares
-  { key: "d1", category: "dares", text: "{subject} cold-plunges for 3 minutes", difficultyElo: 1500 },
+  //
+  // App Store Guideline 1.4.5: an app must not urge people into activities that
+  // risk physical harm. `dares` is template-only at launch for exactly this
+  // reason, so this list IS the policy — anything in it is something Betcha is
+  // paying people to do.
+  //
+  // Cut, and not to be reinstated without a product decision:
+  //   d1 cold plunge        — cold-water immersion; cold shock, drowning
+  //   d4 ghost pepper wing  — capsaicin; vomiting, airway irritation
+  //   d9 barefoot quad lap  — unprotected feet on unknown ground
+  //   d8 lunch alone        — not physical, but it pays a circle to isolate one
+  //                           of its own members, which is the same objection
+  //                           wearing different clothes
+  // The surviving keys keep their original ids; the gaps are the cuts.
   { key: "d2", category: "dares", text: "{subject} does 100 pushups in one sitting", difficultyElo: 1450 },
   { key: "d3", category: "dares", text: "{subject} goes a full day without caffeine", difficultyElo: 1350 },
-  { key: "d4", category: "dares", text: "{subject} finishes the ghost pepper wing", difficultyElo: 1620 },
   { key: "d5", category: "dares", text: "{subject} does karaoke stone cold sober", difficultyElo: 1400 },
   { key: "d6", category: "dares", text: "{subject} wakes up at 5am three days straight", difficultyElo: 1560 },
   { key: "d7", category: "dares", text: "{subject} goes a week without Instagram", difficultyElo: 1500 },
-  { key: "d8", category: "dares", text: "{subject} eats lunch alone in the dining hall", difficultyElo: 1220 },
-  { key: "d9", category: "dares", text: "{subject} runs a lap around the quad barefoot", difficultyElo: 1330 },
 ];
 
 export const BETS_PER_MEMBER_CATEGORY = 13; // proposed; many find no taker

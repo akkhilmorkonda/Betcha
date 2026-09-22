@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CATEGORIES } from "./categories.ts";
 import { MIN_STAKE, MIN_LIABILITY, MAX_LIABILITY } from "./market.ts";
 import { MAX_CIRCLE_NAME } from "./circles.ts";
+import { templateRefusal, templateRefusalMessage } from "./moderation.ts";
 
 /**
  * The shape of every request body the API accepts.
@@ -47,7 +48,25 @@ export const createBetBody = z
     liability: cents.min(MIN_LIABILITY).max(MAX_LIABILITY).optional(),
     proposerSide: side.optional(),
   })
-  .strict();
+  .strict()
+  /**
+   * `dares` is template-only at launch — App Store Guideline 1.4.5, and the
+   * reasoning is in moderation.ts. Enforced here as well as in createBet
+   * because this is the boundary: a dare with free text should never get far
+   * enough in to be a decision the engine has to make.
+   *
+   * The schema can only see that a templateId is present. That the template is
+   * real and is itself a dare is checked in createBet, where the row is loaded.
+   */
+  .superRefine((v, ctx) => {
+    const refusal = templateRefusal({ category: v.category, templateId: v.templateId });
+    if (refusal)
+      ctx.addIssue({
+        code: "custom",
+        path: ["templateId"],
+        message: templateRefusalMessage(refusal),
+      });
+  });
 
 export const placePositionBody = z
   .object({
@@ -63,11 +82,17 @@ export const submitEvidenceBody = z
     // The browser downscales before sending. A data: URL is the only thing this
     // endpoint ever legitimately receives — a remote URL here would make the
     // server fetch whatever the caller names.
-    imageDataUrl: z
-      .string()
-      .startsWith("data:image/", "Evidence must be an inline image")
-      .max(6_000_000, "That photo is too large — retake it in the app so it gets resized.")
-      .nullish(),
+    //
+    // "" is folded to null because that is what the "put it to the circle"
+    // button sends, and "no photo" is a first-class path, not a malformed one.
+    imageDataUrl: z.preprocess(
+      (v) => (v === "" ? null : v),
+      z
+        .string()
+        .startsWith("data:image/", "Evidence must be an inline image")
+        .max(6_000_000, "That photo is too large — retake it in the app so it gets resized.")
+        .nullish()
+    ),
   })
   .strict();
 

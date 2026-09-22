@@ -26,7 +26,18 @@ import {
   type Placed,
   type Side,
 } from "./market";
-import { selfDeal } from "./eligibility";
+import {
+  selfDeal,
+  startVoteRefusal,
+  startVoteRefusalMessage,
+  type StartVoteRefusal,
+} from "./eligibility";
+import {
+  reviewTitle,
+  templateRefusal,
+  templateRefusalMessage,
+  isTemplateOnly,
+} from "./moderation";
 
 export class BetError extends Error {}
 
@@ -127,6 +138,17 @@ export async function createBet(input: {
   if (input.opponentId && input.opponentId === input.subjectId)
     throw new BetError("Pick someone else — a head-to-head needs two people");
 
+  // `dares` is template-only at launch — see moderation.ts. The schema refuses
+  // a dare with no templateId at the boundary; this is the same rule at the
+  // engine, because createBet is also reachable from scripts and from any route
+  // added later, and a rule that lives only in a zod schema is a rule one
+  // forgotten import removes.
+  const missingTemplate = templateRefusal({
+    category: input.category,
+    templateId: input.templateId,
+  });
+  if (missingTemplate) throw new BetError(templateRefusalMessage(missingTemplate));
+
   const backer = await prisma.membership.findUnique({
     where: { userId_circleId: { userId: input.creatorId, circleId: input.circleId } },
   });
@@ -153,14 +175,27 @@ export async function createBet(input: {
 
   const subjectRating = await ratingFor(input.subjectId, input.category);
 
+  // Load the template whenever one is named, not only when it happens to price
+  // the bet. For a template-only category the row IS the vetted proposition, so
+  // it has to exist and it has to be in the same category — otherwise the rule
+  // is bypassed by pointing a `dares` bet at a `grades` template id and riding
+  // the free-text title in alongside it. A head-to-head dare names a template
+  // too, even though the opponent's rating is what prices it.
+  const template = input.templateId
+    ? await prisma.challengeTemplate.findUnique({ where: { id: input.templateId } })
+    : null;
+  const badTemplate = templateRefusal({
+    category: input.category,
+    templateId: input.templateId,
+    templateCategory: template?.category ?? null,
+  });
+  if (badTemplate) throw new BetError(templateRefusalMessage(badTemplate));
+
   let difficultyElo: number;
   if (input.opponentId) {
     difficultyElo = (await ratingFor(input.opponentId, input.category)).elo;
-  } else if (input.templateId) {
-    const t = await prisma.challengeTemplate.findUnique({ where: { id: input.templateId } });
-    difficultyElo = t?.difficultyElo ?? DEFAULT_ELO;
   } else {
-    difficultyElo = DEFAULT_ELO;
+    difficultyElo = template?.difficultyElo ?? DEFAULT_ELO;
   }
 
   const line = lineFor(subjectRating.elo, difficultyElo);
@@ -178,6 +213,21 @@ export async function createBet(input: {
         `${money(Math.floor(liability / (takerMultiplier - 1)))}.`
     );
   }
+
+  // CONTENT SAFETY, check one of two. The free text a member wrote — the title
+  // and both side labels, because all three are published to the circle and all
+  // three are part of the proposition. Last thing before anything is written,
+  // so a refused bet leaves no row and no escrowed money behind.
+  //
+  // With no OPENAI_API_KEY this runs the offline written policy only and comes
+  // back `reviewed: false`; with a key configured and the call failing it
+  // refuses. See the header of moderation.ts for why those differ.
+  const review = await reviewTitle({
+    text: [input.title, input.sideALabel, input.sideBLabel]
+      .filter((s): s is string => Boolean(s && s.trim()))
+      .join(" / "),
+  });
+  if (review.decision === "refuse") throw new BetError(review.reason);
 
   const subject = await prisma.user.findUnique({ where: { id: input.subjectId } });
 
@@ -551,12 +601,42 @@ export async function voidBet(betId: string) {
   return { refunded: bet.proposerLiability };
 }
 
+export class StartVoteError extends BetError {
+  constructor(
+    message: string,
+    readonly refusal: Exclude<StartVoteRefusal, null>
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Drop a bet to a circle vote.
+ *
+ * `by` is the member asking for it. It is required, not optional, precisely
+ * because it used to be absent: startVote took a bet id and did as it was told,
+ * so any member could force an open bet to a vote before its deadline and take
+ * the subject's remaining time away. The rule is `startVoteRefusal` in
+ * eligibility.ts — pure, fuzzed, and the place to read about who may end a bet
+ * early and why the proposer is not one of them.
+ */
 export async function startVote(
   betId: string,
-  meta?: { evidenceUrl?: string | null; sparkClaim?: string | null; sparkConfidence?: number | null }
+  by: { userId: string; isCircleMember: boolean },
+  meta?: { evidenceUrl?: string | null; sparkClaim?: string | null; sparkConfidence?: number | null },
+  now: Date = new Date()
 ) {
   const bet = await prisma.bet.findUnique({ where: { id: betId } });
   if (!bet) throw new BetError("Bet not found");
+
+  const refusal = startVoteRefusal({
+    isCircleMember: by.isCircleMember,
+    isSubject: by.userId === bet.subjectId,
+    betStatus: bet.status,
+    deadline: bet.deadline.getTime(),
+    now: now.getTime(),
+  });
+  if (refusal) throw new StartVoteError(startVoteRefusalMessage(refusal), refusal);
 
   await prisma.resolution.upsert({
     where: { betId },

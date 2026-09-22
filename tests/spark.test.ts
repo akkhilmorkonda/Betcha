@@ -56,7 +56,7 @@ test("non-string observations are discarded", () => {
 
 /**
  * Real Muse Spark response, captured 2026-09-19 from muse-spark-1.3.
- * A photo of someone beside a fridge, submitted against "Akkhil runs 5 miles
+ * A photo of someone beside a fridge, submitted against "Alice runs 5 miles
  * under 40 minutes". The model returned confidence 0.99 — and verdict unclear.
  *
  * Under a confidence threshold of 0.8 this photo settles the bet and pays out.
@@ -70,7 +70,7 @@ const FRIDGE_PHOTO = {
     "Red text reading 'DS + A' drawn on the upper refrigerator door",
     "Red marker drawing of two smiling cartoon faces with a heart below them",
     "Person with long dark hair, gold hoop earrings, heart pendant necklace, and white T-shirt with partial text 'NEW EN' in the foreground",
-    "No running distance, time, stopwatch, fitness app, bib, timestamp, or name Akkhil visible",
+    "No running distance, time, stopwatch, fitness app, bib, timestamp, or name Alice visible",
     "Kitchen setting with a black microwave on top of the refrigerator",
   ],
   verdict: "unclear",

@@ -28,10 +28,10 @@ for (const start of [100, 110, 120]) {
 
         const byCat = (c: string) => Object.fromEntries(MEMBERS.map((m) => [m.key, sim.ratings[m.key][c]]));
         const fc = Object.fromEntries(MEMBERS.map((m) => [m.key, sim.forecast[m.key].elo]));
-        if (rk(byCat("grades"), "akkhil") !== 0) continue;
-        if (rk(byCat("dares"), "akkhil") !== 5) continue;
-        if (sim.record.akkhil.dares.wins !== 0) continue;
-        if (rk(fc, "dev") !== 0) continue;
+        if (rk(byCat("grades"), "alice") !== 0) continue;
+        if (rk(byCat("dares"), "alice") !== 5) continue;
+        if (sim.record.alice.dares.wins !== 0) continue;
+        if (rk(fc, "dave") !== 0) continue;
 
         const spreads = cats.map((c) => {
           const v = MEMBERS.map((m) => sim.ratings[m.key][c]);

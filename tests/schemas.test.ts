@@ -11,11 +11,17 @@ import { MIN_STAKE, MIN_LIABILITY, MAX_LIABILITY } from "../src/lib/market.ts";
 
 const ok = (schema: any, v: unknown) => schema.safeParse(v).success;
 
+/**
+ * `dares` carries a templateId now: the category is template-only at launch
+ * (Guideline 1.4.5 — see src/lib/moderation.ts), so a dare with free text and
+ * no template is no longer a valid body. The rule itself is exercised below.
+ */
 const validBet = {
   circleId: "c1",
   subjectId: "u1",
   category: "dares",
   title: "Cold plunge",
+  templateId: "d1",
 };
 
 test("a minimal valid bet is accepted", () => {
@@ -98,11 +104,49 @@ test("evidence must be an inline data image, never a remote URL", () => {
 test("submitting no photo stays a first-class path", () => {
   assert.equal(ok(submitEvidenceBody, {}), true);
   assert.equal(ok(submitEvidenceBody, { imageDataUrl: null }), true);
+  // What the "can't photograph this" button actually sends. It used to fail
+  // startsWith and come back a 400, so the vote route was unreachable from the
+  // UI at all.
+  assert.equal(ok(submitEvidenceBody, { imageDataUrl: "" }), true);
+  assert.equal(submitEvidenceBody.parse({ imageDataUrl: "" }).imageDataUrl, null);
 });
 
 test("an oversized photo is refused", () => {
   const huge = "data:image/png;base64," + "A".repeat(6_000_001);
   assert.equal(ok(submitEvidenceBody, { imageDataUrl: huge }), false);
+});
+
+/**
+ * Guideline 1.4.5: "apps should not urge customers to participate in activities
+ * (like bets, challenges, etc.) ... that risks physical harm." `dares` is the
+ * category that by name invites exactly that, so at launch its propositions
+ * come from the vetted template bank and nowhere else. Checked here at the
+ * boundary and again in createBet, which can also see whether the template is
+ * real. See src/lib/moderation.ts.
+ */
+test("a dare with free text and no template is refused at the boundary", () => {
+  const freeText = { ...validBet, templateId: undefined };
+  assert.equal(ok(createBetBody, freeText), false);
+  assert.equal(ok(createBetBody, { ...validBet, templateId: null }), false);
+  assert.equal(ok(createBetBody, { ...validBet, templateId: "d1" }), true);
+});
+
+test("the refusal points at templateId and reads like an instruction", () => {
+  const r = createBetBody.safeParse({ ...validBet, templateId: null });
+  assert.equal(r.success, false);
+  const issue = r.error!.issues[0];
+  assert.deepEqual(issue.path, ["templateId"]);
+  assert.match(issue.message, /challenge list/i);
+});
+
+test("free text still survives in grades and sports", () => {
+  for (const category of ["grades", "sports", "custom"]) {
+    assert.equal(
+      ok(createBetBody, { ...validBet, category, templateId: null }),
+      true,
+      `${category} lost its free text`
+    );
+  }
 });
 
 test("a non-object body never throws, it just fails", () => {

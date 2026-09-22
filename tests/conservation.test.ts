@@ -94,11 +94,14 @@ test("nobody can take a side the proposer has already fully covered", () => {
 test("every seeded live bet can absorb at least a minimum stake", () => {
   const sim = simulateHistory();
   const templateElo = sim.templateElo;
+  // Mirrors the `open` list in prisma/seed.ts. `d1` was cut under Guideline
+  // 1.4.5 and the demo slot moved to `d6`; only the reference changed, every
+  // assertion below is the one that was here before.
   const LIVE = [
-    { subject: "akkhil", tpl: "d1", cat: "dares", side: "B", liability: 60 * CENTS, taken: 0 },
-    { subject: "akkhil", tpl: "d2", cat: "dares", side: "B", liability: 40 * CENTS, taken: 0 },
-    { subject: "shash", tpl: "g5", cat: "grades", side: "A", liability: 40 * CENTS, taken: 15 * CENTS },
-    { subject: "yaxin", tpl: "s1", cat: "sports", side: "A", liability: 30 * CENTS, taken: 12 * CENTS },
+    { subject: "alice", tpl: "d6", cat: "dares", side: "B", liability: 60 * CENTS, taken: 0 },
+    { subject: "alice", tpl: "d2", cat: "dares", side: "B", liability: 40 * CENTS, taken: 0 },
+    { subject: "bob", tpl: "g5", cat: "grades", side: "A", liability: 40 * CENTS, taken: 15 * CENTS },
+    { subject: "carol", tpl: "s1", cat: "sports", side: "A", liability: 30 * CENTS, taken: 12 * CENTS },
   ] as const;
 
   for (const b of LIVE) {

@@ -143,7 +143,7 @@ test("settling can never pay out more than the proposer put up", () => {
 // --- a bet nobody can take should never exist ---
 
 test("REGRESSION: $3 behind a 5.35x line is not a valid bet", () => {
-  // Yaxin proposed "Dev doesn't cold plunge" backed with $3. Dev (1222) against
+  // Carol proposed "Dave doesn't cold plunge" backed with $3. Dave (1222) against
   // the plunge (1477) prices takers at 5.35x, so $3 covers 69c — under the $1
   // minimum. The bet was unbettable from the moment it was created.
   const odds = oddsFrom(lineFor(1222, 1477));
