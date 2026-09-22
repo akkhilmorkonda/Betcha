@@ -31,9 +31,9 @@ async function anonymizeUser(userId: string): Promise<void> {
  * which is not published yet. Leave this alone until it is.
  */
 export const auth = betterAuth({
-  // Must match datasource db.provider in prisma/schema.prisma. Currently sqlite
-  // while local work proceeds; flip both together when Postgres is provisioned.
-  database: prismaAdapter(prisma, { provider: "sqlite" }),
+  // Must match datasource db.provider in prisma/schema.prisma. They move
+  // together or every auth request fails.
+  database: prismaAdapter(prisma, { provider: "postgresql" }),
 
   emailAndPassword: { enabled: true },
 

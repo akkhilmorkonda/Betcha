@@ -18,10 +18,31 @@ jobs:
     name: test, typecheck, migrate, seed, build
     runs-on: ubuntu-latest
 
+    # Postgres now, so CI needs a real server. A service container is the
+    # cheapest way to get one: it lives for the job and dies with it, so every
+    # run starts from an empty database and `migrate deploy` is exercised the
+    # way a real deployment would exercise it.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: betcha
+          POSTGRES_PASSWORD: betcha
+          POSTGRES_DB: betcha_ci
+        ports:
+          - 5432:5432
+        # Without the health check the job races the container and fails
+        # intermittently on "connection refused" — the worst kind of red.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
-      # SQLite, so CI needs no database service. Prisma resolves a relative
-      # file: path against prisma/, so this lands at prisma/ci.db.
-      DATABASE_URL: "file:./ci.db"
+      # Points at the service container above. Not a secret: it is reachable
+      # only from inside this job and dies with it.
+      DATABASE_URL: "postgresql://betcha:betcha@localhost:5432/betcha_ci"
       # Not a secret. Better Auth refuses to start without one, and nothing in
       # CI issues a session anyone can use. A real secret lives in .env locally
       # and must never be committed.
@@ -65,8 +86,13 @@ jobs:
       - name: Apply migrations
         run: npx prisma migrate deploy
 
+      # migrate diff needs a shadow database it can build the schema inside,
+      # and the service container only creates betcha_ci.
+      - name: Create the shadow database
+        run: PGPASSWORD=betcha psql -h localhost -U betcha -d betcha_ci -c 'CREATE DATABASE betcha_shadow;'
+
       - name: Check schema and migrations agree
-        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "file:./shadow.db" --exit-code
+        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://betcha:betcha@localhost:5432/betcha_shadow" --exit-code
 
       # Exercises the schema against real writes. The seed is also the only
       # thing that proves Better Auth's tables accept a credential account.
