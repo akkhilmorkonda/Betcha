@@ -35,7 +35,13 @@ export const auth = betterAuth({
     customRules: {
       "/sign-in/email": { window: 60, max: 5 },
       "/sign-up/email": { window: 3600, max: 5 },
+      // All three password-reset paths, because each one sends mail. 1.7.5
+      // serves /request-password-reset as the primary and keeps
+      // /forget-password as a legacy alias — a rule on only one of them leaves
+      // the other on the loose global limit.
+      "/request-password-reset": { window: 3600, max: 5 },
       "/forget-password": { window: 3600, max: 5 },
+      "/reset-password": { window: 3600, max: 5 },
     },
   },
 
