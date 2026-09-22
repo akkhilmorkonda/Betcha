@@ -13,6 +13,7 @@ import {
   moderateImage,
   titleClassifierConfigured,
   imageModerationConfigured,
+  unreviewedTitlesPermitted,
   type TitleVerdictCode,
 } from "../src/lib/moderation.ts";
 import { CATEGORIES } from "../src/lib/categories.ts";
@@ -592,5 +593,41 @@ test("every verdict in the enum has a decision", () => {
   for (const c of codes) {
     const d = interpretTitleVerdict({ verdict: c }).decision;
     assert.ok(d === "allow" || d === "refuse");
+  }
+});
+
+/**
+ * THE INVARIANT: production never allows a title the classifier has not seen.
+ *
+ * The keyless allow path exists so CI and a laptop can create a bet without a
+ * paid key. In production that same path is a liability — a key that is
+ * missing, revoked, mistyped or never set on a new host would downgrade the
+ * whole title defence to the small offline keyword list, silently. `custom` is
+ * unconstrained free text, so that downgrade is precisely the Guideline 1.4.5
+ * gap the template bank exists to close.
+ */
+test("production refuses to allow titles no classifier has seen", () => {
+  assert.equal(unreviewedTitlesPermitted("production"), false);
+});
+
+test("development and test may still create bets without a key", () => {
+  assert.equal(unreviewedTitlesPermitted("development"), true);
+  assert.equal(unreviewedTitlesPermitted("test"), true);
+  // An unset NODE_ENV is a laptop, not a server — `next start` sets production.
+  assert.equal(unreviewedTitlesPermitted(undefined), true);
+});
+
+test("FUZZ: any environment that is not explicitly development or test fails closed", () => {
+  const envs = [
+    "production", "PRODUCTION", "Production", "prod", "staging", "preview",
+    "release", "ci", "", "développement", "development ", " development",
+    "test-ci", "testing", "dev",
+  ];
+  for (const e of envs) {
+    assert.equal(
+      unreviewedTitlesPermitted(e),
+      e === "development" || e === "test",
+      `NODE_ENV=${JSON.stringify(e)} took the wrong branch`
+    );
   }
 });
