@@ -32,9 +32,9 @@ jobs:
       # network calls to a paid endpoint.
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           # The test suite runs under --experimental-strip-types, which needs a
           # recent Node. 24 matches local development.
