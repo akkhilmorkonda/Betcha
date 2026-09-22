@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/Avatar";
 import { EvidenceCapture } from "@/components/EvidenceCapture";
 import { money, signed, mult, timeLeft } from "@/lib/format";
+import { CENTS, MIN_STAKE } from "@/lib/market";
 import { CATEGORY_LABEL, type Category } from "@/lib/categories";
 
 export default function BetPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,7 +13,8 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
   const [bet, setBet] = useState<any>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"A" | "B" | null>(null);
-  const [amount, setAmount] = useState(10);
+  // Cents, like everything else. money() is what turns it into "$10".
+  const [amount, setAmount] = useState(10 * CENTS);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [spark, setSpark] = useState<any>(null);
@@ -402,9 +404,9 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
 
             <input
               type="range"
-              min={1}
+              min={MIN_STAKE}
               max={maxStake}
-              step={1}
+              step={CENTS}
               value={Math.min(amount, maxStake)}
               onChange={(e) => setAmount(Number(e.target.value))}
               className="w-full accent-accent"
@@ -420,7 +422,7 @@ export default function BetPage({ params }: { params: Promise<{ id: string }> })
                 <span className="text-muted">Profit</span>
                 <span className="num">{signed(amount * (m - 1))}</span>
               </div>
-              {capacity < 50 && (
+              {capacity < 50 * CENTS && (
                 <div className="flex justify-between">
                   <span className="text-muted">Left on this side</span>
                   <span className="num">{money(capacity)}</span>

@@ -5,6 +5,7 @@
  * lets stake size touch the line.
  */
 import { prisma } from "./db";
+import { money } from "./format";
 import {
   DEFAULT_ELO,
   DEFAULT_LIABILITY,
@@ -147,7 +148,7 @@ export async function createBet(input: {
   }
   if (backer.balance < liability)
     throw new BetError(
-      `You're backing this with ${liability}, but you only have ${Math.floor(backer.balance)}`
+      `You're backing this with ${money(liability)}, but you only have ${money(backer.balance)}`
     );
 
   const subjectRating = await ratingFor(input.subjectId, input.category);
@@ -172,9 +173,9 @@ export async function createBet(input: {
   const needed = minBackingFor(takerMultiplier);
   if (liability < needed) {
     throw new BetError(
-      `At ${takerMultiplier.toFixed(2)}x you'd need to put up at least $${needed} ` +
-        `for anyone to bet $${MIN_STAKE}. $${liability} only covers ` +
-        `$${(liability / (takerMultiplier - 1)).toFixed(2)}.`
+      `At ${takerMultiplier.toFixed(2)}x you'd need to put up at least ${money(needed)} ` +
+        `for anyone to bet ${money(MIN_STAKE)}. ${money(liability)} only covers ` +
+        `${money(Math.floor(liability / (takerMultiplier - 1)))}.`
     );
   }
 
@@ -235,7 +236,11 @@ export async function placePosition(input: {
     const who = bet.proposerSide === "A" ? bet.sideALabel : bet.sideBLabel;
     throw new BetError(`Whoever put this up already has "${who}" — you can only take the other side`);
   }
+  if (!Number.isInteger(input.amount))
+    throw new BetError("Stake must be a whole number of cents");
   if (input.amount <= 0) throw new BetError("Stake must be positive");
+  if (input.amount < MIN_STAKE)
+    throw new BetError(`The smallest stake is ${money(MIN_STAKE)}`);
   if (new Date() > bet.deadline) throw new BetError("Past the deadline");
 
   // Nobody may profit from their own failure. See src/lib/eligibility.ts for
@@ -293,10 +298,10 @@ export async function placePosition(input: {
       const untouched = fresh.positions.length === 0;
       throw new BetError(
         untouched
-          ? `The $${Math.round(fresh.proposerLiability)} behind this only covers $${capacity.toFixed(2)} at ${multiplier.toFixed(2)}x — too small to bet against`
+          ? `The ${money(fresh.proposerLiability)} behind this only covers ${money(capacity)} at ${multiplier.toFixed(2)}x — too small to bet against`
           : capacity < MIN_STAKE
             ? "This bet is fully covered — nothing left to take"
-            : `Only $${Math.floor(capacity)} left on this bet`
+            : `Only ${money(capacity)} left on this bet`
       );
     }
 

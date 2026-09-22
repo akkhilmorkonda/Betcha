@@ -11,7 +11,7 @@ import {
   STARTING_BALANCE,
   simulateHistory,
 } from "../src/lib/seed-data.ts";
-import { lineFor, oddsFrom } from "../src/lib/market.ts";
+import { lineFor, oddsFrom, payoutFor, CENTS } from "../src/lib/market.ts";
 
 const prisma = new PrismaClient();
 const INVITE_CODE = "HACKMIT";
@@ -59,13 +59,13 @@ async function main() {
     // THE DEMO BET, deliberately left with no taker. Dev has $60 up saying
     // Akkhil can't do it and nobody has taken him on — so it shows as pending,
     // and taking it live is the first move of the demo.
-    { subject: "akkhil", templateKey: "d1", category: "dares", proposer: "dev", proposerSide: "B", liability: 60 },
+    { subject: "akkhil", templateKey: "d1", category: "dares", proposer: "dev", proposerSide: "B", liability: 60 * CENTS },
     // A SECOND dares bet on the same person, so when the first settles his
     // rating moves and this one visibly reprices on screen.
-    { subject: "akkhil", templateKey: "d2", category: "dares", proposer: "priya", proposerSide: "B", liability: 40 },
+    { subject: "akkhil", templateKey: "d2", category: "dares", proposer: "priya", proposerSide: "B", liability: 40 * CENTS },
     // Shash and Yaxin both backing themselves.
-    { subject: "shash", templateKey: "g5", category: "grades", proposer: "shash", proposerSide: "A", liability: 40, taker: "dev", takerAmount: 15 },
-    { subject: "yaxin", templateKey: "s1", category: "sports", proposer: "yaxin", proposerSide: "A", liability: 30, taker: "priya", takerAmount: 12 },
+    { subject: "shash", templateKey: "g5", category: "grades", proposer: "shash", proposerSide: "A", liability: 40 * CENTS, taker: "dev", takerAmount: 15 * CENTS },
+    { subject: "yaxin", templateKey: "s1", category: "sports", proposer: "yaxin", proposerSide: "A", liability: 30 * CENTS, taker: "priya", takerAmount: 12 * CENTS },
   ];
 
   // Money locked up in live bets, per member.
@@ -107,7 +107,7 @@ async function main() {
       data: {
         userId: u.id,
         circleId: circle.id,
-        balance: Math.round((sim.balances[m.key] - (committed[m.key] ?? 0)) * 100) / 100,
+        balance: sim.balances[m.key] - (committed[m.key] ?? 0),
         forecastElo: Math.round(sim.forecast[m.key].elo * 10) / 10,
         forecastBets: sim.forecast[m.key].bets,
       },
@@ -183,7 +183,7 @@ async function main() {
           probAtEntry: s.prob,
           multiplierAtEntry: s.multiplier,
           balanceAtEntry: Math.round(s.balanceAtEntry),
-          payout: won ? Math.round(s.amount * s.multiplier * 100) / 100 : 0,
+          payout: won ? payoutFor(s.amount, s.multiplier) : 0,
           createdAt,
         },
       });

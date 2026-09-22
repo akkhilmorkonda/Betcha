@@ -3,7 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { lineFor, oddsFrom, remainingCapacity, minBackingFor, MIN_LIABILITY, MAX_LIABILITY, DEFAULT_LIABILITY, MIN_STAKE } from "@/lib/market";
+import { lineFor, oddsFrom, remainingCapacity, minBackingFor, MIN_LIABILITY, MAX_LIABILITY, DEFAULT_LIABILITY, MIN_STAKE, CENTS } from "@/lib/market";
 import { money, mult } from "@/lib/format";
 import { CATEGORY_LABEL, type Category } from "@/lib/categories";
 
@@ -212,7 +212,7 @@ export default function NewBetPage({ params }: { params: Promise<{ code: string 
           type="range"
           min={floor}
           max={Math.max(floor, Math.min(MAX_LIABILITY, Math.floor(myBalance)))}
-          step={1}
+          step={CENTS}
           value={Math.max(liability, floor)}
           onChange={(e) => setLiability(Number(e.target.value))}
           className="w-full accent-accent"
