@@ -2,6 +2,22 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { prisma } from "./db";
+import { anonymizedIdentity, isAnonymized } from "./account-deletion";
+
+/**
+ * Scrub one person's identity out of their User row, leaving the row — and
+ * therefore the whole circle ledger that points at it — intact.
+ *
+ * What to write is decided by the pure module; this function only applies it.
+ * Derived from the id alone, so it is idempotent and safe to run twice, which
+ * it will be: both delete hooks below call it.
+ */
+async function anonymizeUser(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { ...anonymizedIdentity(userId), deletedAt: new Date() },
+  });
+}
 
 /**
  * Better Auth owns identity: the user's credentials, sessions and linked
@@ -46,18 +62,56 @@ export const auth = betterAuth({
   },
 
   // App Store Guideline 5.1.1(v): an app that creates accounts must let people
-  // delete them from inside the app. Enabling the flag is the easy half.
+  // delete them from inside the app.
   //
-  // THE HARD HALF IS NOT DONE YET. Membership, Position, Rating and Vote all
-  // declare onDelete: Cascade against User, so deleting a user today would also
-  // delete their bet positions and votes — which are other members' financial
-  // history, not just theirs. Worse, Bet.creator/subject/opponent are required
-  // relations with no onDelete rule, so Postgres would RESTRICT and the delete
-  // would simply fail for anyone who has ever been in a bet.
+  // Deletion here ANONYMIZES; it does not cascade. The User row survives with
+  // its identity columns scrubbed, so Membership, Position, Rating, Vote and
+  // Bet — other members' financial history — are not touched at all and
+  // conservation cannot break. src/lib/account-deletion.ts carries the reasoning
+  // and the rules; tests/account-deletion.test.ts holds them.
   //
-  // The fix is a beforeDelete hook that anonymizes rather than cascades. Wire it
-  // before shipping the delete button. See claude/app-store-readiness.md.
-  user: { deleteUser: { enabled: true } },
+  // beforeDelete is where the scrub happens. It runs before Better Auth's
+  // internalAdapter.deleteUser, which then destroys the Session and Account
+  // rows itself — password hash included — and that is exactly what we want.
+  // What we do NOT want is the user row delete it attempts last; the
+  // databaseHooks.user.delete.before hook below vetoes that.
+  user: {
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        await anonymizeUser(user.id);
+      },
+    },
+  },
+
+  // THE VETO, and the reason this is safe rather than merely careful.
+  //
+  // `deleteUser.beforeDelete` cannot prevent the row delete: better-auth 1.7.5
+  // calls the hook and then deletes unconditionally, with no return value
+  // consulted (dist/api/routes/update-user.mjs). Throwing is its only
+  // interruption, and that would fail the request after the scrub had already
+  // committed. A database hook is the one place the delete can be cancelled —
+  // getWithHooks treats `false` from delete.before as "skip it"
+  // (dist/db/with-hooks.mjs).
+  //
+  // It is deliberately unconditional: in Betcha a User row is never deleted, by
+  // any path, because every ledger relation into it is required and non-null.
+  // Anything that reaches here and has not already been scrubbed gets scrubbed,
+  // so the guarantee does not depend on which route asked. The schema agrees
+  // independently — those relations are onDelete: Restrict, so even a delete
+  // issued outside Better Auth fails loudly rather than eating the ledger.
+  databaseHooks: {
+    user: {
+      delete: {
+        before: async (user) => {
+          if (!isAnonymized(user as Parameters<typeof isAnonymized>[0])) {
+            await anonymizeUser(user.id);
+          }
+          return false;
+        },
+      },
+    },
+  },
 
   // Sign in with Apple. Credentials aren't provisioned yet, and Apple refuses
   // localhost and non-HTTPS callbacks, so this cannot be exercised until there

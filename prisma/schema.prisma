@@ -30,11 +30,20 @@ model Circle {
   bets        Bet[]
 }
 
+// A User row is NEVER deleted. Account deletion scrubs the identity columns in
+// place and leaves the ledger untouched — see src/lib/account-deletion.ts for
+// why, and src/lib/auth.ts for the hooks that do it. Every ledger relation
+// below is onDelete: Restrict so that a stray user.delete() fails loudly
+// instead of quietly taking other members' money history with it.
+
 model User {
   id             String       @id @default(cuid())
   name           String
   avatarSeed     String       @default("")
   createdAt      DateTime     @default(now())
+  // Set when the person deletes their account. The row survives, scrubbed;
+  // this is the marker that says so. Null for a live account.
+  deletedAt      DateTime?
   memberships    Membership[]
   positions      Position[]
   ratings        Rating[]
@@ -65,7 +74,7 @@ model Membership {
   forecastElo  Float    @default(1200)
   forecastBets Int      @default(0)
   joinedAt     DateTime @default(now())
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   circle       Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
 
   @@unique([userId, circleId])
@@ -81,7 +90,7 @@ model Rating {
   elo      Float  @default(1200)
   wins     Int    @default(0)
   losses   Int    @default(0)
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([userId, category])
 }
@@ -130,9 +139,14 @@ model Bet {
   createdAt          DateTime @default(now())
 
   circle     Circle             @relation(fields: [circleId], references: [id], onDelete: Cascade)
-  creator    User               @relation("creator", fields: [creatorId], references: [id])
-  subject    User               @relation("subject", fields: [subjectId], references: [id])
-  opponent   User?              @relation("opponent", fields: [opponentId], references: [id])
+  // Restrict is stated rather than left implicit. creator/subject already
+  // defaulted to it, but `opponent` is optional and so defaulted to SetNull —
+  // which would have silently blanked the opponent out of a head-to-head other
+  // members still hold positions on. A user row is never deleted anyway; this
+  // is the database refusing to be the thing that breaks the ledger.
+  creator    User               @relation("creator", fields: [creatorId], references: [id], onDelete: Restrict)
+  subject    User               @relation("subject", fields: [subjectId], references: [id], onDelete: Restrict)
+  opponent   User?              @relation("opponent", fields: [opponentId], references: [id], onDelete: Restrict)
   template   ChallengeTemplate? @relation(fields: [templateId], references: [id])
   positions  Position[]
   resolution Resolution?
@@ -153,7 +167,7 @@ model Position {
   payout            Int?     // cents
   createdAt         DateTime @default(now())
   bet               Bet      @relation(fields: [betId], references: [id], onDelete: Cascade)
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([betId, userId])
   @@index([betId])
@@ -182,7 +196,7 @@ model Vote {
   side         String // A | B
   createdAt    DateTime   @default(now())
   resolution   Resolution @relation(fields: [resolutionId], references: [id], onDelete: Cascade)
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([resolutionId, userId])
 }
