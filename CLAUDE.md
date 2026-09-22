@@ -12,7 +12,7 @@ your friends will do things; odds come from their track record. Built for HackMI
 
 ```bash
 npm run dev            # next dev
-npm test               # 186 cases, node --test, no DB needed
+npm test               # 194 cases across both workspaces, node --test, no DB needed
 npm run build          # prisma generate && next build
 npm run db:seed        # load the demo circle (+ credential accounts)
 npm run seed:sim       # print the seeded Elo spread without touching the DB
@@ -29,23 +29,35 @@ still call `prisma db push`, which bypasses migration history** — rewrite them
 ## Architecture
 
 ```
-src/lib/market.ts       pure pricing + Elo. no Prisma. the heart of the product.
-src/lib/eligibility.ts  pure. who may take which side.
-src/lib/circles.ts      pure. invite codes, name rules, join rules.
-src/lib/rate-limit.ts   pure. sliding-window policy, one per action.
-src/lib/moderation.ts   content safety. structural rules, written policy, then models.
-src/lib/account-deletion.ts  pure. what a scrubbed user row contains.
-src/lib/schemas.ts      pure. zod shape of every request body.
-src/lib/guard.ts        request-facing. readBody + rateLimit, used by every write route.
-src/lib/session.ts      who is calling. wraps Better Auth. the only identity source.
-src/lib/bets.ts         Prisma-bound orchestration. calls into the two above.
-src/lib/spark.ts        vision-model evidence verdicts.
-src/lib/seed-data.ts    hidden true skills -> 144 simulated bets -> discovered Elo.
-src/app/api/            route handlers.
-src/app/c/[code]        circle feed, new bet, standings.
-src/app/signin          sign in / sign up.
-src/app/b/[id]          bet detail.
+packages/core/          @betcha/core — shared with the future Expo client.
+  market.ts             pure pricing + Elo. no Prisma. the heart of the product.
+  eligibility.ts        pure. who may take which side, and who may end a bet early.
+  circles.ts            pure. invite codes, name rules, join rules.
+  templates.ts          pure. which categories may carry free text at all.
+  schemas.ts            pure. zod shape of every request body.
+  format.ts             money(). the ONLY place cents become dollars.
+  categories.ts rng.ts avatar.ts
+  seed-data.ts          hidden true skills -> simulated bets -> discovered Elo.
+
+apps/api/               the Next.js app; becomes a pure API in Phase 4.
+  src/lib/bets.ts       Prisma-bound orchestration. calls into core.
+  src/lib/moderation.ts written policy + the two model calls. server only.
+  src/lib/spark.ts      vision-model evidence verdicts.
+  src/lib/auth.ts session.ts guard.ts rate-limit.ts account-deletion.ts db.ts
+  src/app/api/          route handlers.
+  src/app/c/[code]      circle feed, new bet, standings.
+  src/app/b/[id]        bet detail.
+  src/app/signin  src/app/account
+  prisma/               schema, migrations, seed.
 ```
+
+`packages/core` holds what a React Native bundle could import: no Prisma, no
+`next/*`, no Node built-ins. Server concerns stay in `apps/api`. When something
+is pure but server-only — rate limiting, account deletion — it stays in the app,
+because "pure" is not the same as "shared".
+
+**`.env` lives in `apps/api/`, not at the repo root.** That is where Next reads
+it and where the package scripts run. Root scripts delegate with `-w apps/api`.
 
 Pure modules carry the invariants and are the only things the test suite can
 reach. **Put new rules in a pure module and call it from `bets.ts`**, not inline
@@ -382,6 +394,6 @@ Long-form reasoning, the full gap list and the phased roadmap live in the
 ## Working style
 
 Run `npm test` before and after any change to `market.ts`, `bets.ts`,
-`eligibility.ts`, `circles.ts`, `rate-limit.ts` or `moderation.ts` — those 186 cases are the safety net for the
+`eligibility.ts`, `circles.ts`, `rate-limit.ts` or `moderation.ts` — those 194 cases are the safety net for the
 whole economy.
 New invariants get a pure module and a fuzz test, not an inline `if`.

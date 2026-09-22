@@ -69,22 +69,24 @@ jobs:
       # types come from. A missing generate is what produced 30 phantom errors
       # once already.
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
 
       # The 91 cases carry the economy's invariants — conservation, the
       # liability cap, self-dealing, the Spark verdict gate. They need no
       # database, so they run first and fail fastest.
+      # Runs EVERY workspace's suite via --workspaces, so a package cannot
+      # quietly stop being covered by being left out of a path.
       - name: Test
         run: npm test
 
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       # deploy, not dev: applies the committed migration history exactly as a
       # real deployment would, and fails if a migration was hand-edited or a
       # schema change was never captured in one.
       - name: Apply migrations
-        run: npx prisma migrate deploy
+        run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
 
       # migrate diff needs a shadow database it can build the schema inside,
       # and the service container only creates betcha_ci.
@@ -92,7 +94,7 @@ jobs:
         run: PGPASSWORD=betcha psql -h localhost -U betcha -d betcha_ci -c 'CREATE DATABASE betcha_shadow;'
 
       - name: Check schema and migrations agree
-        run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://betcha:betcha@localhost:5432/betcha_shadow" --exit-code
+        run: npx prisma migrate diff --from-migrations apps/api/prisma/migrations --to-schema-datamodel apps/api/prisma/schema.prisma --shadow-database-url "postgresql://betcha:betcha@localhost:5432/betcha_shadow" --exit-code
 
       # Exercises the schema against real writes. The seed is also the only
       # thing that proves Better Auth's tables accept a credential account.
