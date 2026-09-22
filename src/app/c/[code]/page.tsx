@@ -75,7 +75,9 @@ export default function CirclePage({ params }: { params: Promise<{ code: string 
 
         <header className="flex items-center justify-between">
           <span className="text-lg font-bold tracking-tight">{data.name}</span>
-          <Avatar name={me.name} size={30} />
+          <Link href="/account" aria-label="Your account">
+            <Avatar name={me.name} size={30} />
+          </Link>
         </header>
 
         <section>
