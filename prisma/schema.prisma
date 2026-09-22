@@ -1,24 +1,27 @@
-// Betcha — SQLite (temporary; Postgres is the destination).
+// Betcha — Postgres (Neon).
 //
-// The schema avoids enums, scalar arrays, Json and native @db. types so the
-// provider stays a one-line change in either direction. Flipped back to sqlite
-// to unblock local work on the Better Auth merge.
+// The schema avoids enums, scalar arrays, Json and native @db. types, which is
+// what made the move from SQLite a provider flip rather than a rewrite. Keep it
+// that way unless there is a reason not to.
+//
+// schema.prisma and src/lib/auth.ts both name the provider and must change
+// together. A mismatch fails every request: P1012 at the Prisma layer, or a
+// silent adapter mismatch at the Better Auth layer.
 //
 // MONEY IS INTEGER CENTS. balance, proposerLiability, amount, balanceAtEntry and
 // payout are all Int. Elo ratings, probabilities and multipliers are genuinely
 // continuous and stay Float. Nothing stores a fractional amount of money.
-//
-// WARNING: prisma/migrations/ is SQLite-dialect SQL and will NOT replay against
-// Postgres. Before moving to Postgres, delete prisma/migrations/ and re-cut the
-// initial migration. Do not build on this history.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Neon gives two URLs. Migrations and introspection need a DIRECT connection;
+  // the pooled one goes through PgBouncer, which cannot run them.
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
 }
 
 model Circle {

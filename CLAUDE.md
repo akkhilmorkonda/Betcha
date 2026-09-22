@@ -198,19 +198,24 @@ Phase 1 of the App Store plan. Auth is wired and the read path is closed.
 
 ## Traps
 
-**The database is SQLite again, temporarily.** `schema.prisma` and
-`src/lib/auth.ts` both name the provider and **must be changed together** — a
-mismatch fails every request with P1012 at the Prisma layer, or a silent adapter
-mismatch at the Better Auth layer. `prisma/migrations/` is SQLite-dialect SQL and
-**will not replay against Postgres**: delete the directory and re-cut the initial
-migration when you switch. Nothing should be built on this history.
+**The database is Postgres.** `schema.prisma` and `src/lib/auth.ts` both name
+the provider and **must be changed together** — a mismatch fails every request
+with P1012 at the Prisma layer, or a silent adapter mismatch at the Better Auth
+layer. The SQLite migration history is gone: it was dialect-specific and could
+never have replayed here, so the three migrations were deleted and re-cut as one
+`init_postgres`. Nothing was converted, because the only data was seed fixtures.
 
-**Rate limiting is in-process and therefore per-instance.** `src/lib/guard.ts`
-holds a module-level `Map`, and Better Auth's own limiter defaults to memory
-too. Two servers behind a load balancer each allow the full quota, and a deploy
-resets every window. That is honest for one container and wrong for serverless,
-where a cold start is a fresh quota. When this scales horizontally the store
-moves to Redis and only `hit` changes — the policies and their tests do not.
+Neon issues two URLs. The **direct** one is in `DATABASE_URL` and is what
+`datasource db` uses for both `url` and `directUrl`, because migrations cannot
+run through PgBouncer. `DATABASE_URL_POOLED` is the pooled endpoint and is
+currently unused — wire it into `url` (leaving `directUrl` direct) if connection
+count ever becomes a problem.
+
+CI runs its own Postgres **service container**, not the Neon database: it starts
+empty every run, so `migrate deploy` is exercised exactly as a deployment would
+exercise it, and no CI run can touch real data. The drift check needs a second
+database on that container, created by an explicit step — the service only
+creates one.
 
 **Metro will not follow a Windows junction, and that is how npm links workspace
 packages here.** Measured, not guessed — see the spike notes below.
