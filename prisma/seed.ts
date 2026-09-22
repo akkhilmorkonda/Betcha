@@ -56,16 +56,20 @@ async function main() {
     proposer: string; proposerSide: "A" | "B"; liability: number;
     taker?: string; takerAmount?: number;
   }[] = [
-    // THE DEMO BET, deliberately left with no taker. Dev has $60 up saying
-    // Akkhil can't do it and nobody has taken him on — so it shows as pending,
+    // THE DEMO BET, deliberately left with no taker. Dave has $60 up saying
+    // Alice can't do it and nobody has taken him on — so it shows as pending,
     // and taking it live is the first move of the demo.
-    { subject: "akkhil", templateKey: "d1", category: "dares", proposer: "dev", proposerSide: "B", liability: 60 * CENTS },
-    // A SECOND dares bet on the same person, so when the first settles his
+    //
+    // This used to be `d1`, the cold plunge, cut under Guideline 1.4.5. `d6` is
+    // the hardest surviving dare, so it still opens at long odds on the member
+    // with the worst dares record — which is the whole point of the slot.
+    { subject: "alice", templateKey: "d6", category: "dares", proposer: "dave", proposerSide: "B", liability: 60 * CENTS },
+    // A SECOND dares bet on the same person, so when the first settles her
     // rating moves and this one visibly reprices on screen.
-    { subject: "akkhil", templateKey: "d2", category: "dares", proposer: "priya", proposerSide: "B", liability: 40 * CENTS },
-    // Shash and Yaxin both backing themselves.
-    { subject: "shash", templateKey: "g5", category: "grades", proposer: "shash", proposerSide: "A", liability: 40 * CENTS, taker: "dev", takerAmount: 15 * CENTS },
-    { subject: "yaxin", templateKey: "s1", category: "sports", proposer: "yaxin", proposerSide: "A", liability: 30 * CENTS, taker: "priya", takerAmount: 12 * CENTS },
+    { subject: "alice", templateKey: "d2", category: "dares", proposer: "erin", proposerSide: "B", liability: 40 * CENTS },
+    // Bob and Carol both backing themselves.
+    { subject: "bob", templateKey: "g5", category: "grades", proposer: "bob", proposerSide: "A", liability: 40 * CENTS, taker: "dave", takerAmount: 15 * CENTS },
+    { subject: "carol", templateKey: "s1", category: "sports", proposer: "carol", proposerSide: "A", liability: 30 * CENTS, taker: "erin", takerAmount: 12 * CENTS },
   ];
 
   // Money locked up in live bets, per member.
