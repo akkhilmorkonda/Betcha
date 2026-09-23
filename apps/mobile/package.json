@@ -3,16 +3,20 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@betcha/core": "*",
+    "@better-auth/expo": "^1.7.5",
+    "better-auth": "^1.7.5",
     "expo": "~57.0.24",
+    "expo-constants": "~18.0.9",
+    "expo-linking": "~8.0.8",
+    "expo-network": "~57.0.2",
+    "expo-router": "~6.0.12",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3",
-    "@betcha/core": "*",
-    "expo-router": "~6.0.12",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.19.0",
-    "expo-linking": "~8.0.8",
-    "expo-constants": "~18.0.9"
+    "react-native-screens": "~4.19.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

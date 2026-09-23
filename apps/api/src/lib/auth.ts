@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
+import { expo } from "@better-auth/expo";
 import { prisma } from "./db";
 import { anonymizedIdentity, isAnonymized } from "./account-deletion";
 
@@ -126,5 +127,19 @@ export const auth = betterAuth({
   // },
   // trustedOrigins: ["https://appleid.apple.com"],
 
-  plugins: [nextCookies()], // must stay last in the array
+  // Which origins may drive the auth endpoints. The native app identifies
+  // itself by its custom scheme, which must match expo.scheme in
+  // apps/mobile/app.json and the scheme passed to expoClient().
+  //
+  // The exp:// entries are Expo Go / dev-client URLs and are DEVELOPMENT ONLY.
+  // They are wildcards, and a wildcard origin allowlist is exactly what was
+  // deleted from next.config.mjs — anyone can register a subdomain. Gating them
+  // on NODE_ENV is what keeps that deletion meaningful.
+  trustedOrigins: [
+    "betcha://",
+    ...(process.env.NODE_ENV === "development" ? ["exp://", "exp://**"] : []),
+  ],
+
+  // expo() before nextCookies(): nextCookies must stay last in the array.
+  plugins: [expo(), nextCookies()],
 });
