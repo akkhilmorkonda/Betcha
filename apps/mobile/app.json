@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Betcha",
+    "slug": "betcha",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.betcha.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.betcha.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "betcha",
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

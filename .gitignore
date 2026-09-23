@@ -31,3 +31,12 @@ Thumbs.db
 
 # Agent worktrees are local scratch, never committed.
 .claude/worktrees/
+
+# Expo
+.expo/
+apps/mobile/.expo-bundle-check/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision

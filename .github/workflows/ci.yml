@@ -103,3 +103,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # The ONLY check that catches a Metro resolution regression. packages/core
+      # is linked into node_modules as a symlink here and a junction on the
+      # Windows dev machine, and Metro treats those differently — see the
+      # junction trap in CLAUDE.md. A green tsc does not prove the bundle works,
+      # because tsc resolves through tsconfig paths and never asks Metro.
+      - name: Mobile bundle
+        run: npm run bundle:check -w @betcha/mobile
