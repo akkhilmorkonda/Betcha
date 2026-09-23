@@ -16,6 +16,8 @@
     "seed:sim": "npm run seed:sim -w apps/api",
     "demo:numbers": "npm run demo:numbers -w apps/api",
     "spark:check": "npm run spark:check -w apps/api",
-    "studio": "npm run studio -w apps/api"
+    "studio": "npm run studio -w apps/api",
+    "dev:lan": "npm run dev:lan -w apps/api",
+    "mobile": "npm run start -w @betcha/mobile"
   }
 }
