@@ -1,69 +1,79 @@
-import { ScrollView, Text, View } from "react-native";
-import {
-  lineFor,
-  oddsFrom,
-  payoutFor,
-  money,
-  mult,
-  CENTS,
-  MIN_STAKE,
-  generateInviteCode,
-  isWellFormedInviteCode,
-  isTemplateOnly,
-  placePositionBody,
-} from "@betcha/core";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 
-/**
- * The scaffold's real job: prove the shared core actually runs inside a React
- * Native bundle, on device, not just in a test.
- *
- * Everything below is computed by the same modules the API prices bets with.
- * If Metro ever stops resolving the workspace package, this screen is where it
- * shows up first — which is why it renders values rather than a placeholder.
- */
+import { useSession, signOut } from "../lib/auth-client";
+import { apiFetch, ApiError } from "../lib/api";
+import { money } from "@betcha/core";
+
+const BG = "#0B0D12";
+const MUTED = "#8A8F98";
+
+type Member = { userId: string; name: string; balance: number };
+type CircleResponse = {
+  circle: { name: string; members: Member[]; resolvedCount: number; open: unknown[] };
+};
+
 export default function Index() {
-  const odds = oddsFrom(lineFor(1300, 1200));
-  const stake = 5 * CENTS;
-  const code = generateInviteCode();
-  const fractional = placePositionBody.safeParse({ side: "A", amount: 100.5 });
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
+  const [circle, setCircle] = useState<CircleResponse["circle"] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const rows: [string, string][] = [
-    ["Line (1300 vs 1200)", `${(odds.probA * 100).toFixed(1)}%`],
-    ["Multiplier A", mult(odds.multiplierA)],
-    ["Stake", money(stake)],
-    ["Returns at A", money(payoutFor(stake, odds.multiplierA))],
-    ["Minimum stake", money(MIN_STAKE)],
-    ["Invite code", `${code} (valid: ${isWellFormedInviteCode(code)})`],
-    ["Dares template-only", String(isTemplateOnly("dares"))],
-    ["Fractional stake refused", String(!fractional.success)],
-  ];
+  useEffect(() => {
+    if (isPending) return;
+    if (!session) {
+      router.replace("/signin");
+      return;
+    }
+    // The first real proof the native session reaches the API: this endpoint
+    // requires membership, so a missing cookie comes back 401, not empty data.
+    apiFetch<CircleResponse>("/api/circle/HACKMIT")
+      .then((r) => setCircle(r.circle))
+      .catch((e) => setErr(e instanceof ApiError ? e.message : String(e)));
+  }, [isPending, session, router]);
+
+  if (isPending || !session) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color="#fff" />
+      </View>
+    );
+  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0B0D12" }}>
+    <View style={{ flex: 1, backgroundColor: BG }}>
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 72, gap: 20 }}>
         <View>
-          <Text style={{ color: "#fff", fontSize: 28, fontWeight: "700" }}>Betcha</Text>
-          <Text style={{ color: "#8A8F98", fontSize: 14, marginTop: 4 }}>
-            Shared engine, running on device
+          <Text style={{ color: "#fff", fontSize: 26, fontWeight: "700" }}>
+            {circle?.name ?? "Betcha"}
+          </Text>
+          <Text style={{ color: MUTED, fontSize: 14, marginTop: 4 }}>
+            Signed in as {session.user.name}
           </Text>
         </View>
 
-        <View style={{ gap: 10 }}>
-          {rows.map(([label, value]) => (
-            <View
-              key={label}
-              style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}
-            >
-              <Text style={{ color: "#8A8F98", fontSize: 14, flexShrink: 1 }}>{label}</Text>
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{value}</Text>
-            </View>
-          ))}
-        </View>
+        {err && <Text style={{ color: "#FF5C5C", fontSize: 14 }}>{err}</Text>}
 
-        <Text style={{ color: "#8A8F98", fontSize: 12, lineHeight: 18 }}>
-          Every figure above comes from @betcha/core — the same pricing, money
-          formatting and validation the API uses. Nothing is duplicated here.
-        </Text>
+        {circle && (
+          <View style={{ gap: 10 }}>
+            {circle.members.map((m) => (
+              <View key={m.userId} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: MUTED, fontSize: 15 }}>{m.name}</Text>
+                <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>
+                  {money(m.balance)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <Pressable
+          onPress={async () => { await signOut(); router.replace("/signin"); }}
+          style={{ borderWidth: 1, borderColor: "#222834", borderRadius: 10, paddingVertical: 12, alignItems: "center" }}
+        >
+          <Text style={{ color: MUTED, fontSize: 15 }}>Sign out</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
