@@ -17,7 +17,8 @@
     "start": "next start",
     "studio": "prisma studio",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:lan": "next dev -H 0.0.0.0"
   },
   "dependencies": {
     "@betcha/core": "*",
