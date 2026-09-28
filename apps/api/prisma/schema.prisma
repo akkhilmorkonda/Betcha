@@ -14,6 +14,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // relationJoins lets a query resolve its relations with a JOIN instead of one
+  // round trip per relation level. Against a hosted database that round trip is
+  // ~30ms, so a deep include tree pays it several times over. Preview feature.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
